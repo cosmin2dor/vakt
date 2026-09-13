@@ -1,0 +1,19 @@
+<!doctype html>
+<!--
+  UX.md §2.2: Vakt ships one theme, dark, with no toggle. `class="dark"` is
+  set permanently here (not conditionally, not via prefers-color-scheme) so
+  that any copied shadcn component whose internals reach for a `dark:`
+  utility resolves to the only branch that exists.
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vakt</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
