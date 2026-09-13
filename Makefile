@@ -1,3 +1,4 @@
+# Keep in sync with the `version:` pin in .github/workflows/ci.yml
 GOLANGCI_LINT_VERSION := v2.13.2
 
 .PHONY: generate build test lint up install-hooks
@@ -20,6 +21,7 @@ test:
 	go test ./...
 
 lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) config verify
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run
 
 # Runs the daemon locally. docker-compose (create-docker-compose) will add
