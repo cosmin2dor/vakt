@@ -7,3 +7,16 @@ make test
 
 echo "pre-commit: make lint"
 make lint
+
+if [ -f web/package.json ] && [ -d web/node_modules ]; then
+	echo "pre-commit: npm run build (web)"
+	npm --prefix web run build
+
+	echo "pre-commit: npm run lint (web)"
+	npm --prefix web run lint
+
+	echo "pre-commit: npm run format:check (web)"
+	npm --prefix web run format:check
+else
+	echo "pre-commit: web/node_modules not found, skipping web checks (run npm --prefix web install)"
+fi
