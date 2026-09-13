@@ -4,6 +4,127 @@
  */
 
 export interface paths {
+  '/tasks': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List every task in the vault.
+     * @description The whole vault, unfiltered and unpaginated (SDD.md §1, "Data volume": "fetch the whole vault, filter in the client — no server-side filtering or pagination. A household vault is small"). Ordering, grouping (overdue / today / upcoming / triggered per UX.md §6.1), and any filtering happen client-side.
+     */
+    get: operations['listTasks']
+    put?: never
+    /**
+     * Create a new task.
+     * @description Appends a new task line to the given file. The id is server-generated from the title slug, with a numeric suffix on collision (SDD.md G5) — it is never client-supplied.
+     */
+    post: operations['createTask']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tasks/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Fetch a single task by id. */
+    get: operations['getTask']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tasks/{id}/fulfill': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record that a task's real-world obligation was completed.
+     * @description Fulfillment is independent of dispatch (PRD.md §1, "Decoupled Execution & Fulfillment"; §2). A one-time task (@once) moves to @state(completed) and its checkbox is marked done; a recurring task (@schedule) is stamped @last_completed(NOW) and stays scheduled for its next cycle (PRD.md §5.1). Fulfilling before the next scheduled fire point bypasses exactly that one trigger (SDD.md G8).
+     */
+    post: operations['fulfillTask']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tasks/{id}/pause': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend a task's scheduler evaluation.
+     * @description Sets @state(paused). Bypassed by the scheduler until resumed (PRD.md §5.3, SDD.md State reference). One of the task card's quick actions (UX.md §6, "Quick Actions").
+     */
+    post: operations['pauseTask']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tasks/{id}/resume': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Return a paused task to active evaluation.
+     * @description Sets @state(active). The counterpart quick action to pause (UX.md §6.1, "Pause/Resume").
+     */
+    post: operations['resumeTask']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tasks/{id}/skip': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Bypass upcoming schedule triggers.
+     * @description Increments @skip_count by the given count (default 1), per PRD.md §5.2. UX.md §6.1's "Skip Next" quick action calls this with the default count.
+     */
+    post: operations['skipTask']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/tasks/{id}/trigger': {
     parameters: {
       query?: never
@@ -84,12 +205,180 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/directories': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Inspect the vault's directory structure.
+     * @description Returns the whole vault as one tree, rooted at the vault root (FR-2.3; UX.md §6.1 "Vault Directory", §6 "Vault browser"). No depth or path parameter — SDD.md §1's "fetch the whole vault, filter in the client" applies here too; the browser expands and collapses the tree client-side (UX.md §6, `Collapsible`).
+     */
+    get: operations['listDirectories']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/files': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Fetch a single vault file's raw content.
+     * @description Backs the vault browser's file view (UX.md §6.1) and, later, the Smart Editor's read path (full editor semantics are M5). Returns the file's raw Markdown byte-for-byte; this endpoint does not parse it — that is what `/tasks` and (per CLAUDE.md) `/parse` are for. `path` is a query parameter rather than a path segment because vault paths contain `/` themselves.
+     */
+    get: operations['getFile']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Subscribe to real-time vault change events.
+     * @description A server-sent events stream (FR-2.2): "Expose a real-time event stream to push file modification events to connected PWAs." Each SSE `data:` line is one JSON-encoded EventEnvelope. The cycle that produces these events is SDD.md §2.2's reactive cycle — a vault write reaches the index, and the index change is pushed here to every connected client.
+     */
+    get: operations['streamEvents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
     /** @description Unique across the whole vault (SDD.md G1, G3). */
     TaskId: string
+    /**
+     * @description The five values PRD.md §3.2 and schema/directives.yaml's @state directive define (SDD.md §3, State reference).
+     * @enum {string}
+     */
+    TaskState: 'active' | 'triggered' | 'paused' | 'completed' | 'failed'
+    /** @description SDD.md G7's suppression ladder, collapsed to the one answer that holds right now — never the ladder itself, and never the raw @skip_until / @last_completed / @skip_count values the client would otherwise have to evaluate against "now" (CLAUDE.md: the backend is the only parser). Recomputed on every fetch and every SSE update. */
+    EffectiveSuppression: {
+      /** @description Whether the next scheduled fire point will be bypassed. */
+      suppressed: boolean
+      /**
+       * @description Which rung of the G7 ladder is currently suppressing the task; null when suppressed is false.
+       * @enum {string|null}
+       */
+      reason: 'state_not_active' | 'skip_until' | 'early_completion' | 'skip_count' | null
+    }
+    /** @description The full task representation. Every field here is a value the client can render as-is — no cron, no date-time evaluated against "now", no raw directive text (SDD.md §4, M1 "On schema depth"; UX.md §6, task card anatomy). */
+    Task: {
+      id: components['schemas']['TaskId']
+      /** @description The task line's title text (UX.md §6, card anatomy). */
+      title: string
+      /** @description Path relative to the vault root (UX.md §6, card anatomy: "@dog_feed · /Household/Routines.md"). */
+      file_path: string
+      state: components['schemas']['TaskState']
+      /**
+       * Format: date-time
+       * @description The next computed fire point, or null when the task has no valid schedule or cannot fire again — paused, completed, failed, or an @once already elapsed (SDD.md G11). Computed server-side from @schedule/@once (UX.md §6, card anatomy: "in 2h 14m" is rendered client-side as a diff against this timestamp — the client does no cron evaluation, only date arithmetic on a value the server already resolved).
+       */
+      next_fire: string | null
+      /** @description A human-readable rendering of @schedule or @once, e.g. "Daily at 08:00" or "Once, Mar 3 2026 09:00" — never the raw cron expression or ISO timestamp a client would have to interpret itself. */
+      schedule_summary: string | null
+      effective_suppression: components['schemas']['EffectiveSuppression']
+      /**
+       * Format: date-time
+       * @description PRD.md §2.3 — when the reminder was last dispatched.
+       */
+      last_triggered: string | null
+      /**
+       * Format: date-time
+       * @description PRD.md §2.3 — when fulfillment was last recorded.
+       */
+      last_completed: string | null
+      /** @description The @reason directive — why a task is paused, skipped, or failed (PRD.md §3.2; SDD.md G13). */
+      reason: string | null
+      /** @description The integration module this task dispatches to, e.g. ios_notifications (PRD.md §4.1). */
+      target: string | null
+    }
+    /** @description FR-2.1's create path. The id is never accepted here — it is always server-generated from the title slug (SDD.md G5). */
+    TaskCreate: {
+      title: string
+      /** @description Vault-relative path of the file to append the new task line to. */
+      file_path: string
+      /** @description A cron expression. Mutually exclusive with once. */
+      schedule?: string | null
+      /**
+       * Format: date-time
+       * @description An ISO timestamp. Mutually exclusive with schedule.
+       */
+      once?: string | null
+      target?: string | null
+    }
+    /** @description A parse-time problem raised against a specific line (SDD.md G3, G4, G5, G12; G15: "the diagnostic surfaces in the UI"). Severity follows the language SDD.md itself uses per gap — "raises an error diagnostic" for G3/G4, "raises a warning diagnostic" for G5/G12. */
+    Diagnostic: {
+      /** @enum {string} */
+      severity: 'warning' | 'error'
+      /** @description Human-readable explanation, shown as-is in the UI. */
+      message: string
+      file_path: string
+      /** @description 1-based line number the diagnostic applies to. */
+      line: number
+      /** @description A machine-readable classification, e.g. duplicate_id, invalid_id, missing_id, unknown_payload_variable. Not a closed enum — the registry-driven directive set can grow new diagnostic codes without a contract change. */
+      code: string | null
+      /** @description The task this diagnostic concerns, when one could be resolved (e.g. null for a duplicate @id's later, unscheduled occurrence). */
+      task_id: components['schemas']['TaskId']
+    }
+    /** @description One SSE `data:` payload (FR-2.2; SDD.md §2.2's reactive cycle). `type` discriminates which of the optional fields is populated. */
+    EventEnvelope: {
+      /**
+       * @description task_upserted: a task was created or its derived fields changed — task is populated. task_removed: a task left the index (file deleted, @id removed, or superseded by a duplicate per G4) — task_id is populated. diagnostic_raised / diagnostic_cleared: a parse problem appeared or was resolved — diagnostic is populated. heartbeat: a periodic keep-alive with no payload, so a client can distinguish a silent-but-alive connection from a dropped one.
+       * @enum {string}
+       */
+      type:
+        'task_upserted' | 'task_removed' | 'diagnostic_raised' | 'diagnostic_cleared' | 'heartbeat'
+      /** Format: date-time */
+      timestamp: string
+      task?: components['schemas']['Task']
+      task_id?: components['schemas']['TaskId']
+      diagnostic?: components['schemas']['Diagnostic']
+    }
+    /** @description One node of the vault's directory tree (FR-2.3). */
+    DirectoryEntry: {
+      name: string
+      /** @description Vault-relative path. */
+      path: string
+      /** @enum {string} */
+      type: 'file' | 'directory'
+      /** @description Present (possibly empty) only when type is directory. */
+      children?: components['schemas']['DirectoryEntry'][] | null
+    }
+    /** @description A single vault file's raw content, unparsed. */
+    FileContent: {
+      path: string
+      /** @description The file's raw Markdown, byte-for-byte. */
+      content: string
+      /** @description Size in bytes. */
+      size: number
+      /** Format: date-time */
+      modified_at: string | null
+    }
     /** @description What the integration module reported back, not a delivery receipt. "accepted" means the push service accepted the message for delivery — Web Push returns no delivery confirmation (SDD.md §3, state reference). */
     TriggerOutcome: {
       task_id: components['schemas']['TaskId']
@@ -140,6 +429,235 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  listTasks: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Every known task, in no particular order. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task'][]
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  createTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TaskCreate']
+      }
+    }
+    responses: {
+      /** @description The task was created. */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description The request body is missing a required field, or names both @schedule and @once (or neither). */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  getTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: components['schemas']['TaskId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The task. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description No task with this id is known to the index. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  fulfillTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: components['schemas']['TaskId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The task, updated. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description No task with this id is known to the index. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  pauseTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: components['schemas']['TaskId']
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @description Recorded as @reason. */
+          reason?: string | null
+        }
+      }
+    }
+    responses: {
+      /** @description The task, updated. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description No task with this id is known to the index. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  resumeTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: components['schemas']['TaskId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The task, updated. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description No task with this id is known to the index. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  skipTask: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: components['schemas']['TaskId']
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @default 1 */
+          count?: number
+        }
+      }
+    }
+    responses: {
+      /** @description The task, updated. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Task']
+        }
+      }
+      /** @description No task with this id is known to the index. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
   triggerTask: {
     parameters: {
       query?: never
@@ -268,6 +786,81 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  listDirectories: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The root directory entry, with nested children. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DirectoryEntry']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  getFile: {
+    parameters: {
+      query: {
+        /** @description Path relative to the vault root, e.g. Household/Routines.md. */
+        path: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The file's content. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FileContent']
+        }
+      }
+      /** @description No file exists at this path. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  streamEvents: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description An open text/event-stream connection. Each event's `data:` payload conforms to EventEnvelope. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'text/event-stream': components['schemas']['EventEnvelope']
         }
       }
       default: components['responses']['UnexpectedError']
