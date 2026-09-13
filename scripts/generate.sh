@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Regenerates Go and TypeScript types from schema/openapi.yaml (SDD.md
-# §2.5). Called by `make generate`; not meant to be run standalone from
-# an arbitrary working directory.
+# Regenerates Go and TypeScript types from schema/openapi.yaml and
+# schema/directives.yaml (SDD.md §2.5). Called by `make generate`; not
+# meant to be run standalone from an arbitrary working directory.
 #
 # Go types: oapi-codegen (github.com/oapi-codegen/oapi-codegen/v2),
 # `types` only, into internal/model — config in schema/oapi-codegen.yaml.
@@ -12,9 +12,10 @@
 # for golangci-lint, so no tool dependency needs to land in go.mod or
 # package.json.
 #
-# schema/directives.yaml (the registry) is out of scope here — the
-# registry-constants generator is separate, later work
-# (generate-registry-constants).
+# Directive registry constants: schema/directives.yaml compiles to
+# internal/model/directives_gen.go and web/src/lib/directives-gen.ts via
+# cmd/gen-directives, this repo's own bespoke generator (no existing
+# tool understands the registry's shape).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,3 +37,12 @@ echo "generate: TypeScript types (openapi-typescript ${OPENAPI_TYPESCRIPT_VERSIO
 # through web/'s own installed Prettier (not a separately pinned version)
 # before committing it — requires `npm --prefix web ci` to have run.
 (cd web && npx prettier --write src/lib/api-types.ts)
+
+echo "generate: directive registry constants (cmd/gen-directives) -> internal/model/, web/src/lib/"
+go run ./cmd/gen-directives \
+	schema/directives.yaml \
+	internal/model/directives_gen.go \
+	web/src/lib/directives-gen.ts
+gofmt -w internal/model/directives_gen.go
+
+(cd web && npx prettier --write src/lib/directives-gen.ts)

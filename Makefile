@@ -3,12 +3,12 @@ GOLANGCI_LINT_VERSION := v2.13.2
 
 .PHONY: generate build test lint up down dev install-hooks
 
-# Regenerates Go and TypeScript types from schema/openapi.yaml (SDD.md
-# §2.5): oapi-codegen into internal/model, openapi-typescript into
-# web/src/lib/api-types.ts. schema/directives.yaml's registry constants
-# are separate, later work (generate-registry-constants). The guard
-# below is kept so a fresh clone still runs every target successfully
-# even if scripts/generate.sh is ever removed.
+# Regenerates Go and TypeScript types from schema/openapi.yaml and
+# schema/directives.yaml (SDD.md §2.5): oapi-codegen into internal/model,
+# openapi-typescript into web/src/lib/api-types.ts, and the directive
+# registry constants (cmd/gen-directives) into internal/model and
+# web/src/lib. The guard below is kept so a fresh clone still runs every
+# target successfully even if scripts/generate.sh is ever removed.
 generate:
 	@if [ -f schema/openapi.yaml ] && [ -x scripts/generate.sh ]; then \
 		scripts/generate.sh; \
