@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/cosmin2dor/vakt/internal/api"
+	"github.com/cosmin2dor/vakt/internal/config"
 	"github.com/cosmin2dor/vakt/internal/engine/dispatch"
 )
 
@@ -35,6 +36,23 @@ func main() {
 		vaultDir = "vault"
 	}
 
+	// VAKT_CONFIG_DIR points at the /config volume: system state (VAPID
+	// keypair, push subscriptions) that must survive restarts but never
+	// belongs in the vault (SDD.md §2.3).
+	configDir := os.Getenv("VAKT_CONFIG_DIR")
+	if configDir == "" {
+		configDir = "config"
+	}
+
+	subscriptions, err := config.NewStore(configDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	vapid, err := config.NewVAPIDStore(configDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// No real modules registered yet — ios_notifications lands in a
 	// later, separate task and registers itself here additively.
 	registry := dispatch.NewRegistry()
@@ -42,6 +60,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.HealthzHandler)
 	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", api.TriggerHandler(vaultDir, registry))
+	mux.HandleFunc("/api/v1/subscriptions", api.CreateSubscriptionHandler(subscriptions))
+	mux.HandleFunc("/api/v1/subscriptions/unsubscribe", api.DeleteSubscriptionHandler(subscriptions))
+	mux.HandleFunc("/api/v1/vapid-public-key", api.VAPIDPublicKeyHandler(vapid))
 	mux.Handle("/", api.StaticHandler(webDir))
 
 	log.Printf("vaktd listening on %s, serving frontend from %s", addr, webDir)
