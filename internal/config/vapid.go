@@ -89,6 +89,25 @@ func (s *VAPIDStore) PublicKey() string {
 	return s.keypair.Public
 }
 
+// PrivateKey decodes the stored raw scalar into an *ecdsa.PrivateKey, the
+// shape webpush.New expects — this store persists key material, it never
+// hands out a signer, so the two types stay independently constructed
+// (webpush's own decoupling) and this is the glue between them.
+func (s *VAPIDStore) PrivateKey() (*ecdsa.PrivateKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	raw, err := base64.RawURLEncoding.DecodeString(s.keypair.Private)
+	if err != nil {
+		return nil, fmt.Errorf("config: decoding vapid private key: %w", err)
+	}
+	priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), raw)
+	if err != nil {
+		return nil, fmt.Errorf("config: parsing vapid private key: %w", err)
+	}
+	return priv, nil
+}
+
 // generateVAPIDKeypair creates a fresh P-256 ECDSA keypair (VAPID, RFC
 // 8292, is signed with ECDSA), raw-encoded and base64url-unpadded.
 func generateVAPIDKeypair() (vapidKeypair, error) {
