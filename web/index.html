@@ -9,7 +9,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      UX.md §8: theme-color and status-bar-style must match --background
+      (#0e0e11, from index.css's HSL triplet) everywhere the shell can flash,
+      or a light-mode phone gets a white splash screen and status bar.
+    -->
+    <meta name="theme-color" content="#0e0e11" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Vakt</title>
   </head>
   <body>
