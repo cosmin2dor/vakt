@@ -1,0 +1,26 @@
+# One service, per SDD.md §2.3: the Go binary serves the API and the built
+# PWA bundle from a single origin. Two volumes with different lifecycles —
+# /vault is the user's Markdown, bind-mounted from the host so it's just
+# files on disk the user can browse/edit/git outside the container;
+# /config is system state (VAPID keypair, push subscriptions) that must
+# survive restarts but has no business being visible as vault content.
+#
+# TLS is deliberately out of scope here — see deploy/TLS.md. The chosen
+# path (`tailscale serve`) runs on the host (or as an operator-managed
+# sidecar) pointed at the port this service publishes; tailscaled is not
+# bundled into this image.
+services:
+  vaktd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${VAKT_PORT:-8080}:8080"
+    environment:
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - "${VAULT_PATH:-./vault}:/vault"
+      - vakt-config:/config
+
+volumes:
+  vakt-config:

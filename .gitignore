@@ -4,3 +4,5 @@ issues/**
 web/node_modules/
 web/dist/
 *.local.yaml
+/vault/
+.env
