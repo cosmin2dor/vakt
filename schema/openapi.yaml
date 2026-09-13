@@ -1,0 +1,227 @@
+openapi: 3.0.3
+
+info:
+  title: Vakt API
+  version: "1"
+  description: >
+    The v1 API contract. This document covers only what M1's runtime
+    serves: triggering a task's dispatch, and the push subscription
+    lifecycle (subscribe, unsubscribe, VAPID public key). It deliberately
+    excludes the Task DTO and every derived-field endpoint — those belong
+    to the full v1 contract authored once the scheduler exists (SDD.md §4,
+    M1 summary: "The shape freezes here; the scheduler that populates it
+    arrives in M3.").
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.txt
+
+servers:
+  - url: /api/v1
+
+# No auth: PRD.md §8 assumes a private home network with no multi-user
+# roles, and SDD.md §1 doesn't revisit that for v1. Explicit rather than
+# an oversight — see CLAUDE.md concerns raised on the mkcert TLS fallback.
+security: []
+
+paths:
+  /tasks/{id}/trigger:
+    post:
+      operationId: triggerTask
+      summary: Dispatch a task's outbound trigger immediately.
+      description: >
+        Resolves the task by id, dispatches it through the integration
+        module registry, and returns the outcome. Does not write back to
+        the vault — no @last_triggered stamp. The surgical patcher and
+        writeback orchestration are M2/M3 work; this endpoint exists to
+        prove the dispatch path in M1.
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      responses:
+        "200":
+          description: The task was resolved and dispatch was attempted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerOutcome"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /subscriptions:
+    post:
+      operationId: createSubscription
+      summary: Enrol a push subscription.
+      description: >
+        Stores a Web Push subscription object as returned by
+        `PushSubscription.toJSON()` in the browser. Persisted to the
+        /config volume, never to the vault (SDD.md §2.3).
+      tags: [subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscription"
+      responses:
+        "201":
+          description: The subscription was stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushSubscription"
+        "400":
+          description: The subscription object is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /subscriptions/unsubscribe:
+    post:
+      operationId: deleteSubscription
+      summary: Remove a push subscription.
+      description: >
+        Identified by endpoint URL rather than a synthetic id — a push
+        subscription's endpoint is already its unique key (SDD.md G14:
+        the same pruning a 404/410 from the push service triggers).
+      tags: [subscriptions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+      responses:
+        "204":
+          description: The subscription was removed, or was already absent.
+        "400":
+          description: The request body is missing or malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      summary: Fetch the VAPID public key for push enrolment.
+      description: >
+        Base64url-encoded, suitable as `applicationServerKey` in
+        `PushManager.subscribe()`. The keypair lives on the /config
+        volume and survives restarts (SDD.md §2.3).
+      tags: [subscriptions]
+      responses:
+        "200":
+          description: The current VAPID public key.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [public_key]
+                properties:
+                  public_key:
+                    type: string
+        "404":
+          description: No VAPID keypair has been provisioned on /config yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+components:
+  responses:
+    UnexpectedError:
+      description: An unexpected error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    TaskId:
+      type: string
+      description: Unique across the whole vault (SDD.md G1, G3).
+      pattern: "^[a-z0-9_-]{1,64}$"
+
+    TriggerOutcome:
+      type: object
+      description: >
+        What the integration module reported back, not a delivery
+        receipt. "accepted" means the push service accepted the message
+        for delivery — Web Push returns no delivery confirmation
+        (SDD.md §3, state reference).
+      required: [task_id, target, dispatched_at, accepted]
+      properties:
+        task_id:
+          $ref: "#/components/schemas/TaskId"
+        target:
+          type: string
+          description: The integration module that handled dispatch, e.g. ios_notifications.
+        dispatched_at:
+          type: string
+          format: date-time
+        accepted:
+          type: boolean
+        detail:
+          type: string
+          nullable: true
+          description: Human-readable outcome detail, e.g. a delivery error.
+
+    PushSubscription:
+      type: object
+      description: The shape a browser's PushSubscription.toJSON() produces.
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        expirationTime:
+          type: string
+          format: date-time
+          nullable: true
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              nullable: true
+              additionalProperties: true
