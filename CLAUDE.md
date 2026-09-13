@@ -97,3 +97,4 @@ Each of these is a natural instinct to follow and each would pull a later milest
 - Go packages follow `SDD.md` §2.6. `internal/engine/` is the core and knows nothing about HTTP or any notification provider.
 - Never write system state into `/vault`. VAPID keys and push subscriptions live on `/config`.
 - Never re-serialize a Markdown file from its parsed model. Writes are byte-range patches to a single directive span.
+- Code comments are terse — one line or two, stating what/why. Not paragraphs walking through alternatives or rationale.
