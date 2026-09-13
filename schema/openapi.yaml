@@ -4,13 +4,15 @@ info:
   title: Vakt API
   version: "1"
   description: >
-    The v1 API contract. This document covers only what M1's runtime
-    serves: triggering a task's dispatch, and the push subscription
-    lifecycle (subscribe, unsubscribe, VAPID public key). It deliberately
-    excludes the Task DTO and every derived-field endpoint — those belong
-    to the full v1 contract authored once the scheduler exists (SDD.md §4,
-    M1 summary: "The shape freezes here; the scheduler that populates it
-    arrives in M3.").
+    The full v1 API contract (SDD.md §4, M1 summary: "The shape freezes
+    here; the scheduler that populates it arrives in M3."). The Task DTO
+    below carries only derived fields — next fire, schedule summary,
+    effective suppression state — never raw directive text a client
+    would have to parse or evaluate against "now" (CLAUDE.md: "the
+    backend is the only parser"). The shape is authored in M1, ahead of
+    the scheduler (M3) and dashboard (M4) that populate and consume it,
+    so that the frontend can be built against a mock server generated
+    from this spec in parallel with the backend milestones (SDD.md §7).
   license:
     name: AGPL-3.0-only
     url: https://www.gnu.org/licenses/agpl-3.0.txt
@@ -24,6 +26,234 @@ servers:
 security: []
 
 paths:
+  /tasks:
+    get:
+      operationId: listTasks
+      summary: List every task in the vault.
+      description: >
+        The whole vault, unfiltered and unpaginated (SDD.md §1, "Data
+        volume": "fetch the whole vault, filter in the client — no
+        server-side filtering or pagination. A household vault is small").
+        Ordering, grouping (overdue / today / upcoming / triggered per
+        UX.md §6.1), and any filtering happen client-side.
+      tags: [tasks]
+      responses:
+        "200":
+          description: Every known task, in no particular order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+    post:
+      operationId: createTask
+      summary: Create a new task.
+      description: >
+        Appends a new task line to the given file. The id is
+        server-generated from the title slug, with a numeric suffix on
+        collision (SDD.md G5) — it is never client-supplied.
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+      responses:
+        "201":
+          description: The task was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: The request body is missing a required field, or names both @schedule and @once (or neither).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      summary: Fetch a single task by id.
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      responses:
+        "200":
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /tasks/{id}/fulfill:
+    post:
+      operationId: fulfillTask
+      summary: Record that a task's real-world obligation was completed.
+      description: >
+        Fulfillment is independent of dispatch (PRD.md §1, "Decoupled
+        Execution & Fulfillment"; §2). A one-time task (@once) moves to
+        @state(completed) and its checkbox is marked done; a recurring
+        task (@schedule) is stamped @last_completed(NOW) and stays
+        scheduled for its next cycle (PRD.md §5.1). Fulfilling before
+        the next scheduled fire point bypasses exactly that one trigger
+        (SDD.md G8).
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      responses:
+        "200":
+          description: The task, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /tasks/{id}/pause:
+    post:
+      operationId: pauseTask
+      summary: Suspend a task's scheduler evaluation.
+      description: >
+        Sets @state(paused). Bypassed by the scheduler until resumed
+        (PRD.md §5.3, SDD.md State reference). One of the task card's
+        quick actions (UX.md §6, "Quick Actions").
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  nullable: true
+                  description: Recorded as @reason.
+      responses:
+        "200":
+          description: The task, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /tasks/{id}/resume:
+    post:
+      operationId: resumeTask
+      summary: Return a paused task to active evaluation.
+      description: >
+        Sets @state(active). The counterpart quick action to pause
+        (UX.md §6.1, "Pause/Resume").
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      responses:
+        "200":
+          description: The task, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /tasks/{id}/skip:
+    post:
+      operationId: skipTask
+      summary: Bypass upcoming schedule triggers.
+      description: >
+        Increments @skip_count by the given count (default 1), per
+        PRD.md §5.2. UX.md §6.1's "Skip Next" quick action calls this
+        with the default count.
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/TaskId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  default: 1
+      responses:
+        "200":
+          description: The task, updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No task with this id is known to the index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
   /tasks/{id}/trigger:
     post:
       operationId: triggerTask
@@ -149,6 +379,86 @@ paths:
         default:
           $ref: "#/components/responses/UnexpectedError"
 
+  /directories:
+    get:
+      operationId: listDirectories
+      summary: Inspect the vault's directory structure.
+      description: >
+        Returns the whole vault as one tree, rooted at the vault root
+        (FR-2.3; UX.md §6.1 "Vault Directory", §6 "Vault browser"). No
+        depth or path parameter — SDD.md §1's "fetch the whole vault,
+        filter in the client" applies here too; the browser expands and
+        collapses the tree client-side (UX.md §6, `Collapsible`).
+      tags: [vault]
+      responses:
+        "200":
+          description: The root directory entry, with nested children.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryEntry"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /files:
+    get:
+      operationId: getFile
+      summary: Fetch a single vault file's raw content.
+      description: >
+        Backs the vault browser's file view (UX.md §6.1) and, later, the
+        Smart Editor's read path (full editor semantics are M5). Returns
+        the file's raw Markdown byte-for-byte; this endpoint does not
+        parse it — that is what `/tasks` and (per CLAUDE.md) `/parse`
+        are for. `path` is a query parameter rather than a path segment
+        because vault paths contain `/` themselves.
+      tags: [vault]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: Path relative to the vault root, e.g. Household/Routines.md.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The file's content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+        "404":
+          description: No file exists at this path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
+  /events:
+    get:
+      operationId: streamEvents
+      summary: Subscribe to real-time vault change events.
+      description: >
+        A server-sent events stream (FR-2.2): "Expose a real-time event
+        stream to push file modification events to connected PWAs."
+        Each SSE `data:` line is one JSON-encoded EventEnvelope. The
+        cycle that produces these events is SDD.md §2.2's reactive
+        cycle — a vault write reaches the index, and the index change is
+        pushed here to every connected client.
+      tags: [events]
+      responses:
+        "200":
+          description: >
+            An open text/event-stream connection. Each event's `data:`
+            payload conforms to EventEnvelope.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
 components:
   responses:
     UnexpectedError:
@@ -163,6 +473,253 @@ components:
       type: string
       description: Unique across the whole vault (SDD.md G1, G3).
       pattern: "^[a-z0-9_-]{1,64}$"
+
+    TaskState:
+      type: string
+      description: >
+        The five values PRD.md §3.2 and schema/directives.yaml's @state
+        directive define (SDD.md §3, State reference).
+      enum: [active, triggered, paused, completed, failed]
+
+    EffectiveSuppression:
+      type: object
+      description: >
+        SDD.md G7's suppression ladder, collapsed to the one answer that
+        holds right now — never the ladder itself, and never the raw
+        @skip_until / @last_completed / @skip_count values the client
+        would otherwise have to evaluate against "now" (CLAUDE.md: the
+        backend is the only parser). Recomputed on every fetch and
+        every SSE update.
+      required: [suppressed, reason]
+      properties:
+        suppressed:
+          type: boolean
+          description: Whether the next scheduled fire point will be bypassed.
+        reason:
+          type: string
+          nullable: true
+          description: >
+            Which rung of the G7 ladder is currently suppressing the
+            task; null when suppressed is false.
+          enum:
+            - state_not_active
+            - skip_until
+            - early_completion
+            - skip_count
+
+    Task:
+      type: object
+      description: >
+        The full task representation. Every field here is a value the
+        client can render as-is — no cron, no date-time evaluated
+        against "now", no raw directive text (SDD.md §4, M1 "On schema
+        depth"; UX.md §6, task card anatomy).
+      required:
+        - id
+        - title
+        - file_path
+        - state
+        - next_fire
+        - schedule_summary
+        - effective_suppression
+        - last_triggered
+        - last_completed
+        - reason
+        - target
+      properties:
+        id:
+          $ref: "#/components/schemas/TaskId"
+        title:
+          type: string
+          description: The task line's title text (UX.md §6, card anatomy).
+        file_path:
+          type: string
+          description: >
+            Path relative to the vault root (UX.md §6, card anatomy:
+            "@dog_feed · /Household/Routines.md").
+        state:
+          $ref: "#/components/schemas/TaskState"
+        next_fire:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            The next computed fire point, or null when the task has no
+            valid schedule or cannot fire again — paused, completed,
+            failed, or an @once already elapsed (SDD.md G11). Computed
+            server-side from @schedule/@once (UX.md §6, card anatomy:
+            "in 2h 14m" is rendered client-side as a diff against this
+            timestamp — the client does no cron evaluation, only date
+            arithmetic on a value the server already resolved).
+        schedule_summary:
+          type: string
+          nullable: true
+          description: >
+            A human-readable rendering of @schedule or @once, e.g.
+            "Daily at 08:00" or "Once, Mar 3 2026 09:00" — never the raw
+            cron expression or ISO timestamp a client would have to
+            interpret itself.
+        effective_suppression:
+          $ref: "#/components/schemas/EffectiveSuppression"
+        last_triggered:
+          type: string
+          format: date-time
+          nullable: true
+          description: PRD.md §2.3 — when the reminder was last dispatched.
+        last_completed:
+          type: string
+          format: date-time
+          nullable: true
+          description: PRD.md §2.3 — when fulfillment was last recorded.
+        reason:
+          type: string
+          nullable: true
+          description: >
+            The @reason directive — why a task is paused, skipped, or
+            failed (PRD.md §3.2; SDD.md G13).
+        target:
+          type: string
+          nullable: true
+          description: >
+            The integration module this task dispatches to, e.g.
+            ios_notifications (PRD.md §4.1).
+
+    TaskCreate:
+      type: object
+      description: >
+        FR-2.1's create path. The id is never accepted here — it is
+        always server-generated from the title slug (SDD.md G5).
+      required: [title, file_path]
+      properties:
+        title:
+          type: string
+        file_path:
+          type: string
+          description: Vault-relative path of the file to append the new task line to.
+        schedule:
+          type: string
+          nullable: true
+          description: A cron expression. Mutually exclusive with once.
+        once:
+          type: string
+          format: date-time
+          nullable: true
+          description: An ISO timestamp. Mutually exclusive with schedule.
+        target:
+          type: string
+          nullable: true
+
+    Diagnostic:
+      type: object
+      description: >
+        A parse-time problem raised against a specific line (SDD.md G3,
+        G4, G5, G12; G15: "the diagnostic surfaces in the UI"). Severity
+        follows the language SDD.md itself uses per gap — "raises an
+        error diagnostic" for G3/G4, "raises a warning diagnostic" for
+        G5/G12.
+      required: [severity, message, file_path, line, code, task_id]
+      properties:
+        severity:
+          type: string
+          enum: [warning, error]
+        message:
+          type: string
+          description: Human-readable explanation, shown as-is in the UI.
+        file_path:
+          type: string
+        line:
+          type: integer
+          description: 1-based line number the diagnostic applies to.
+        code:
+          type: string
+          nullable: true
+          description: >
+            A machine-readable classification, e.g. duplicate_id,
+            invalid_id, missing_id, unknown_payload_variable. Not a
+            closed enum — the registry-driven directive set can grow
+            new diagnostic codes without a contract change.
+        task_id:
+          $ref: "#/components/schemas/TaskId"
+          nullable: true
+          description: >
+            The task this diagnostic concerns, when one could be
+            resolved (e.g. null for a duplicate @id's later, unscheduled
+            occurrence).
+
+    EventEnvelope:
+      type: object
+      description: >
+        One SSE `data:` payload (FR-2.2; SDD.md §2.2's reactive cycle).
+        `type` discriminates which of the optional fields is populated.
+      required: [type, timestamp]
+      properties:
+        type:
+          type: string
+          enum:
+            - task_upserted
+            - task_removed
+            - diagnostic_raised
+            - diagnostic_cleared
+            - heartbeat
+          description: >
+            task_upserted: a task was created or its derived fields
+            changed — task is populated. task_removed: a task left the
+            index (file deleted, @id removed, or superseded by a
+            duplicate per G4) — task_id is populated. diagnostic_raised
+            / diagnostic_cleared: a parse problem appeared or was
+            resolved — diagnostic is populated. heartbeat: a periodic
+            keep-alive with no payload, so a client can distinguish a
+            silent-but-alive connection from a dropped one.
+        timestamp:
+          type: string
+          format: date-time
+        task:
+          $ref: "#/components/schemas/Task"
+          nullable: true
+        task_id:
+          $ref: "#/components/schemas/TaskId"
+          nullable: true
+        diagnostic:
+          $ref: "#/components/schemas/Diagnostic"
+          nullable: true
+
+    DirectoryEntry:
+      type: object
+      description: One node of the vault's directory tree (FR-2.3).
+      required: [name, path, type]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+          description: Vault-relative path.
+        type:
+          type: string
+          enum: [file, directory]
+        children:
+          type: array
+          nullable: true
+          description: Present (possibly empty) only when type is directory.
+          items:
+            $ref: "#/components/schemas/DirectoryEntry"
+
+    FileContent:
+      type: object
+      description: A single vault file's raw content, unparsed.
+      required: [path, content, size, modified_at]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+          description: The file's raw Markdown, byte-for-byte.
+        size:
+          type: integer
+          description: Size in bytes.
+        modified_at:
+          type: string
+          format: date-time
+          nullable: true
 
     TriggerOutcome:
       type: object
