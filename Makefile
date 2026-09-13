@@ -1,6 +1,6 @@
 GOLANGCI_LINT_VERSION := v2.13.2
 
-.PHONY: generate build test lint up
+.PHONY: generate build test lint up install-hooks
 
 # Regenerates Go and TypeScript types from schema/openapi.yaml and
 # schema/directives.yaml (SDD.md §2.5). Until the schema and codegen
@@ -26,3 +26,8 @@ lint:
 # the containerized path; this is the fastest loop until then.
 up:
 	go run ./cmd/vaktd
+
+# Points git at .githooks so pre-commit runs make test (and, once
+# enforce-go-linting-ci lands, make lint) before every commit.
+install-hooks:
+	git config core.hooksPath .githooks
