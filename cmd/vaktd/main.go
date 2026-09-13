@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/cosmin2dor/vakt/internal/api"
 )
 
 func main() {
@@ -15,10 +17,21 @@ func main() {
 		addr = ":8080"
 	}
 
-	mux := http.NewServeMux()
-	// no op for now
+	// VAKT_WEB_DIR points at the built PWA bundle. "web/dist" is the
+	// conventional Vite build output and is not yet produced by anything
+	// in this repo (create-frontend-scaffold owns that); StaticHandler
+	// degrades to 404s rather than failing to start when it's empty or
+	// absent.
+	webDir := os.Getenv("VAKT_WEB_DIR")
+	if webDir == "" {
+		webDir = "web/dist"
+	}
 
-	log.Printf("vaktd listening on %s", addr)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", api.HealthzHandler)
+	mux.Handle("/", api.StaticHandler(webDir))
+
+	log.Printf("vaktd listening on %s, serving frontend from %s", addr, webDir)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}
