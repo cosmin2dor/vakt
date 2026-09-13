@@ -27,6 +27,7 @@ COPY --from=build /src/web/dist ./web/dist
 
 ENV VAKT_ADDR=:8080
 ENV VAKT_WEB_DIR=/app/web/dist
+ENV VAKT_CONFIG_DIR=/config
 
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/vaktd"]
