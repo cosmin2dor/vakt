@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vakt.local/schema/directives.schema.json",
+  "title": "Vakt directive registry",
+  "description": "Structural contract for schema/directives.yaml. See that file's header for the field reference.",
+  "type": "object",
+  "required": ["directives"],
+  "additionalProperties": false,
+  "properties": {
+    "directives": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/directive" },
+      "uniqueItems": true
+    }
+  },
+  "definitions": {
+    "directive": {
+      "type": "object",
+      "required": [
+        "name",
+        "value_type",
+        "arity",
+        "required",
+        "system_written",
+        "ui_helper"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "value_type": {
+          "type": "string",
+          "enum": ["string", "enum", "cron", "datetime", "integer"]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "arity": {
+          "type": "integer",
+          "const": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "system_written": {
+          "type": "boolean"
+        },
+        "ui_helper": {
+          "type": ["string", "null"],
+          "enum": [null, "enum_dropdown", "cron_popover", "datetime_picker"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "properties": { "value_type": { "const": "enum" } },
+              "required": ["value_type"]
+            }
+          },
+          "then": {
+            "not": { "required": ["values"] }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,151 @@
+# The directive registry: the source of truth for every @name(value) span
+# Vakt recognizes. Go types and TypeScript constants are generated from
+# this file (SDD.md §2.5, CLAUDE.md "Conventions") — never hand-write a
+# directive elsewhere. It is also served live at GET /api/v1/directives,
+# so the Smart Editor's autocomplete and helpers can never drift ahead of
+# what the daemon actually parses.
+#
+# Every directive in PRD.md §3.2 appears exactly once below, except
+# @payload — deferred, see its own note further down.
+#
+# Field reference:
+#   name            The @directive name, without the @ or parens.
+#   value_type      string | enum | cron | datetime | integer.
+#                   "enum" without a `values` list means the valid set is
+#                   dynamic at runtime rather than fixed here — see the
+#                   directive's own comment.
+#   values          Only present for a closed enum: its fixed value list.
+#   pattern         Only present when the value is further constrained
+#                   beyond its type (e.g. @id's charset).
+#   arity           Positional values inside the directive's parentheses.
+#                   Always 1 in M1 — implement-directive-lexer explicitly
+#                   scopes out nested parens and multi-value directives.
+#   required        true | false. true means a valid task line must carry
+#                   it — a line without it does not schedule (SDD.md G5).
+#                   Several directives are practically necessary for a
+#                   task to ever do anything (@target for dispatch,
+#                   one of @schedule/@once for timing) without being a
+#                   hard parse-time requirement the way @id/@state are —
+#                   that distinction lives in each directive's own
+#                   comment, not as a third value here.
+#   system_written  true only for the two directives PRD.md §3.2 marks
+#                   "Auto" — the daemon is their sole writer and a user
+#                   never types them. This is narrower than "the daemon
+#                   ever writes this directive": @state, @skip_count, and
+#                   @reason are also written back by the engine at
+#                   runtime (SDD.md G6, G7, G10, G13), but they start as
+#                   user-authored fields and must stay fully editable —
+#                   marking them system_written here would tell the Smart
+#                   Editor to render them read-only, which would be wrong.
+#   ui_helper       Which contextual helper the Smart Editor opens
+#                   (PRD.md §6.2, UX.md §6). null when there is none —
+#                   the directive is authored as plain text.
+
+directives:
+  - name: id
+    value_type: string
+    pattern: "^[a-z0-9_-]{1,64}$" # SDD.md G3
+    arity: 1
+    required: true
+    # false, not true: a task created through the API gets one
+    # auto-generated from the title slug (SDD.md G5), but the primary
+    # authoring path is a human typing directly in the vault (M4 summary:
+    # "Authoring can happen in Obsidian or any text editor"), where the
+    # user writes @id themselves like any other directive. The API's
+    # auto-slug is a creation-time convenience, not an ongoing rewrite —
+    # unlike @last_triggered/@last_completed, nothing re-derives or
+    # overwrites an existing @id later.
+    system_written: false
+    ui_helper: null
+
+  - name: state
+    value_type: enum
+    values: [active, triggered, paused, completed, failed]
+    arity: 1
+    required: true
+    system_written: false
+    ui_helper: enum_dropdown
+
+  - name: schedule
+    value_type: cron
+    arity: 1
+    # Not hard-required on its own: a task needs @schedule or @once, not
+    # both, and a single boolean per directive can't express that OR — a
+    # task missing both is what actually fails to schedule.
+    required: false
+    system_written: false
+    ui_helper: cron_popover
+
+  - name: once
+    value_type: datetime
+    arity: 1
+    # See @schedule above — same OR relationship, same reason this isn't
+    # hard-required on its own.
+    required: false
+    system_written: false
+    ui_helper: datetime_picker
+
+  - name: target
+    value_type: string
+    # Not a closed enum here: valid values are whichever integration
+    # modules this build has registered (MVP: ios_notifications only).
+    # The module registry, not this file, is the source of truth
+    # (SDD.md §2.6, PRD.md §4.1) — a target this build doesn't recognize
+    # fails dispatch, not parsing. The Smart Editor still gets a dropdown
+    # (ui_helper below); it just populates it from the running daemon
+    # rather than from a static list.
+    #
+    # required is false, not true: a task missing @target still parses
+    # and schedules — it simply never successfully dispatches, which is
+    # a dispatch-time failure, not a parse-time one, so it doesn't belong
+    # in the same bucket as a missing @id or @state.
+    arity: 1
+    required: false
+    system_written: false
+    ui_helper: enum_dropdown
+
+  # @payload is deliberately absent from this registry, not merely
+  # undocumented. PRD.md §3.2/§4.2 describe it as a per-task directive
+  # the user writes to override the default notification payload, but
+  # that's being reconsidered: payload should likely be inherited from
+  # the target module's own configuration rather than typed by the user
+  # per task. Until that's settled, it isn't exposed — a line containing
+  # @payload(...) is simply an unrecognized directive. implement-
+  # ios-notifications-module already sends a fixed payload in M1 either
+  # way; this only affects when/whether the override mechanism reappears
+  # (M3 owns payload templating regardless of shape).
+
+  - name: skip_count
+    value_type: integer
+    arity: 1
+    required: false
+    system_written: false
+    ui_helper: null
+
+  - name: skip_until
+    value_type: datetime
+    arity: 1
+    required: false
+    system_written: false
+    ui_helper: datetime_picker
+
+  - name: last_triggered
+    value_type: datetime
+    arity: 1
+    required: false
+    system_written: true
+    ui_helper: null
+
+  - name: last_completed
+    value_type: datetime
+    arity: 1
+    required: false
+    system_written: true
+    ui_helper: null
+
+  - name: reason
+    value_type: string
+    arity: 1
+    required: false
+    system_written: false
+    ui_helper: null
