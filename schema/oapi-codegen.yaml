@@ -1,0 +1,12 @@
+# Config for oapi-codegen (github.com/oapi-codegen/oapi-codegen/v2), the
+# Go half of the codegen bridge described in SDD.md §2.5. Generates only
+# `types` — the request/response DTOs — into internal/model. The HTTP
+# server interface (`std-http-server` or similar) is deliberately not
+# generated here: internal/api's real handlers are later, separate work
+# (SDD.md §2.6).
+package: model
+generate:
+  models: true
+output: internal/model/openapi_types.gen.go
+output-options:
+  skip-prune: false
