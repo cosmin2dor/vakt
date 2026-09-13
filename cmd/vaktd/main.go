@@ -9,8 +9,6 @@ import (
 	"os"
 
 	"github.com/cosmin2dor/vakt/internal/api"
-	"github.com/cosmin2dor/vakt/internal/config"
-	"github.com/cosmin2dor/vakt/internal/engine/dispatch"
 )
 
 func main() {
@@ -44,29 +42,26 @@ func main() {
 		configDir = "config"
 	}
 
-	subscriptions, err := config.NewStore(configDir)
+	// VAKT_VAPID_CONTACT is the mailto: contact a push service can reach
+	// operators at, per RFC 8292's "sub" claim. Not a secret; a household
+	// deployment gets a working default if it's never set.
+	vapidContact := os.Getenv("VAKT_VAPID_CONTACT")
+	if vapidContact == "" {
+		vapidContact = "mailto:vakt@localhost"
+	}
+
+	handler, err := api.NewServer(api.ServerConfig{
+		WebDir:       webDir,
+		VaultDir:     vaultDir,
+		ConfigDir:    configDir,
+		VAPIDContact: vapidContact,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	vapid, err := config.NewVAPIDStore(configDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// No real modules registered yet — ios_notifications lands in a
-	// later, separate task and registers itself here additively.
-	registry := dispatch.NewRegistry()
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", api.HealthzHandler)
-	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", api.TriggerHandler(vaultDir, registry))
-	mux.HandleFunc("/api/v1/subscriptions", api.CreateSubscriptionHandler(subscriptions))
-	mux.HandleFunc("/api/v1/subscriptions/unsubscribe", api.DeleteSubscriptionHandler(subscriptions))
-	mux.HandleFunc("/api/v1/vapid-public-key", api.VAPIDPublicKeyHandler(vapid))
-	mux.Handle("/", api.StaticHandler(webDir))
 
 	log.Printf("vaktd listening on %s, serving frontend from %s", addr, webDir)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
