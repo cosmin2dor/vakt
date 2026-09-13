@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/cosmin2dor/vakt/internal/api"
+	"github.com/cosmin2dor/vakt/internal/engine/dispatch"
 )
 
 func main() {
@@ -27,8 +28,20 @@ func main() {
 		webDir = "web/dist"
 	}
 
+	// VAKT_VAULT_DIR points at the Markdown vault, mirroring VAKT_WEB_DIR
+	// above (docker-compose.yml mounts the host vault at /vault).
+	vaultDir := os.Getenv("VAKT_VAULT_DIR")
+	if vaultDir == "" {
+		vaultDir = "vault"
+	}
+
+	// No real modules registered yet — ios_notifications lands in a
+	// later, separate task and registers itself here additively.
+	registry := dispatch.NewRegistry()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.HealthzHandler)
+	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", api.TriggerHandler(vaultDir, registry))
 	mux.Handle("/", api.StaticHandler(webDir))
 
 	log.Printf("vaktd listening on %s, serving frontend from %s", addr, webDir)
