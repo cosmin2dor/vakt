@@ -9,24 +9,6 @@ import (
 	"github.com/cosmin2dor/vakt/internal/model"
 )
 
-// writeError writes the generated Error shape with the given HTTP status.
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	var e model.Error
-	e.Error.Code = code
-	e.Error.Message = message
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(e)
-}
-
-// writeJSON writes v as a JSON body with the given HTTP status.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
 // toStoreSubscription converts the generated model type into the config
 // package's PushSubscription, the shape Store persists. ExpirationTime is
 // carried as Unix millis on disk (matching PushSubscription.toJSON()'s
