@@ -10,12 +10,11 @@ linters:
     - unused
     - ineffassign
     - govet
+  exclusions:
+    paths:
+      - web
 
 formatters:
   enable:
     - gofmt
     - goimports
-
-issues:
-  exclude-dirs:
-    - web
