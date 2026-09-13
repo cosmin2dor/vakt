@@ -27,7 +27,7 @@ lint:
 up:
 	go run ./cmd/vaktd
 
-# Points git at .githooks so pre-commit runs make test (and, once
-# enforce-go-linting-ci lands, make lint) before every commit.
+# Points git at .githooks so pre-commit runs make test and make lint
+# before every commit.
 install-hooks:
 	git config core.hooksPath .githooks
