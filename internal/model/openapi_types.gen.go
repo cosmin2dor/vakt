@@ -7,6 +7,166 @@ import (
 	"time"
 )
 
+// Defines values for DiagnosticSeverity.
+const (
+	DiagnosticSeverityError   DiagnosticSeverity = "error"
+	DiagnosticSeverityWarning DiagnosticSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticSeverity enum.
+func (e DiagnosticSeverity) Valid() bool {
+	switch e {
+	case DiagnosticSeverityError:
+		return true
+	case DiagnosticSeverityWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DirectoryEntryType.
+const (
+	Directory DirectoryEntryType = "directory"
+	File      DirectoryEntryType = "file"
+)
+
+// Valid indicates whether the value is a known member of the DirectoryEntryType enum.
+func (e DirectoryEntryType) Valid() bool {
+	switch e {
+	case Directory:
+		return true
+	case File:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EffectiveSuppressionReason.
+const (
+	EarlyCompletion EffectiveSuppressionReason = "early_completion"
+	SkipCount       EffectiveSuppressionReason = "skip_count"
+	SkipUntil       EffectiveSuppressionReason = "skip_until"
+	StateNotActive  EffectiveSuppressionReason = "state_not_active"
+)
+
+// Valid indicates whether the value is a known member of the EffectiveSuppressionReason enum.
+func (e EffectiveSuppressionReason) Valid() bool {
+	switch e {
+	case EarlyCompletion:
+		return true
+	case SkipCount:
+		return true
+	case SkipUntil:
+		return true
+	case StateNotActive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EventEnvelopeType.
+const (
+	DiagnosticCleared EventEnvelopeType = "diagnostic_cleared"
+	DiagnosticRaised  EventEnvelopeType = "diagnostic_raised"
+	Heartbeat         EventEnvelopeType = "heartbeat"
+	TaskRemoved       EventEnvelopeType = "task_removed"
+	TaskUpserted      EventEnvelopeType = "task_upserted"
+)
+
+// Valid indicates whether the value is a known member of the EventEnvelopeType enum.
+func (e EventEnvelopeType) Valid() bool {
+	switch e {
+	case DiagnosticCleared:
+		return true
+	case DiagnosticRaised:
+		return true
+	case Heartbeat:
+		return true
+	case TaskRemoved:
+		return true
+	case TaskUpserted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskState.
+const (
+	Active    TaskState = "active"
+	Completed TaskState = "completed"
+	Failed    TaskState = "failed"
+	Paused    TaskState = "paused"
+	Triggered TaskState = "triggered"
+)
+
+// Valid indicates whether the value is a known member of the TaskState enum.
+func (e TaskState) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Completed:
+		return true
+	case Failed:
+		return true
+	case Paused:
+		return true
+	case Triggered:
+		return true
+	default:
+		return false
+	}
+}
+
+// Diagnostic A parse-time problem raised against a specific line (SDD.md G3, G4, G5, G12; G15: "the diagnostic surfaces in the UI"). Severity follows the language SDD.md itself uses per gap — "raises an error diagnostic" for G3/G4, "raises a warning diagnostic" for G5/G12.
+type Diagnostic struct {
+	// Code A machine-readable classification, e.g. duplicate_id, invalid_id, missing_id, unknown_payload_variable. Not a closed enum — the registry-driven directive set can grow new diagnostic codes without a contract change.
+	Code     *string `json:"code"`
+	FilePath string  `json:"file_path"`
+
+	// Line 1-based line number the diagnostic applies to.
+	Line int `json:"line"`
+
+	// Message Human-readable explanation, shown as-is in the UI.
+	Message  string             `json:"message"`
+	Severity DiagnosticSeverity `json:"severity"`
+
+	// TaskId Unique across the whole vault (SDD.md G1, G3).
+	TaskId TaskId `json:"task_id"`
+}
+
+// DiagnosticSeverity defines model for Diagnostic.Severity.
+type DiagnosticSeverity string
+
+// DirectoryEntry One node of the vault's directory tree (FR-2.3).
+type DirectoryEntry struct {
+	// Children Present (possibly empty) only when type is directory.
+	Children *[]DirectoryEntry `json:"children,omitempty"`
+	Name     string            `json:"name"`
+
+	// Path Vault-relative path.
+	Path string             `json:"path"`
+	Type DirectoryEntryType `json:"type"`
+}
+
+// DirectoryEntryType defines model for DirectoryEntry.Type.
+type DirectoryEntryType string
+
+// EffectiveSuppression SDD.md G7's suppression ladder, collapsed to the one answer that holds right now — never the ladder itself, and never the raw @skip_until / @last_completed / @skip_count values the client would otherwise have to evaluate against "now" (CLAUDE.md: the backend is the only parser). Recomputed on every fetch and every SSE update.
+type EffectiveSuppression struct {
+	// Reason Which rung of the G7 ladder is currently suppressing the task; null when suppressed is false.
+	Reason *EffectiveSuppressionReason `json:"reason"`
+
+	// Suppressed Whether the next scheduled fire point will be bypassed.
+	Suppressed bool `json:"suppressed"`
+}
+
+// EffectiveSuppressionReason Which rung of the G7 ladder is currently suppressing the task; null when suppressed is false.
+type EffectiveSuppressionReason string
+
 // Error defines model for Error.
 type Error struct {
 	Error struct {
@@ -14,6 +174,36 @@ type Error struct {
 		Details *map[string]interface{} `json:"details,omitempty"`
 		Message string                  `json:"message"`
 	} `json:"error"`
+}
+
+// EventEnvelope One SSE `data:` payload (FR-2.2; SDD.md §2.2's reactive cycle). `type` discriminates which of the optional fields is populated.
+type EventEnvelope struct {
+	// Diagnostic A parse-time problem raised against a specific line (SDD.md G3, G4, G5, G12; G15: "the diagnostic surfaces in the UI"). Severity follows the language SDD.md itself uses per gap — "raises an error diagnostic" for G3/G4, "raises a warning diagnostic" for G5/G12.
+	Diagnostic *Diagnostic `json:"diagnostic,omitempty"`
+
+	// Task The full task representation. Every field here is a value the client can render as-is — no cron, no date-time evaluated against "now", no raw directive text (SDD.md §4, M1 "On schema depth"; UX.md §6, task card anatomy).
+	Task *Task `json:"task,omitempty"`
+
+	// TaskId Unique across the whole vault (SDD.md G1, G3).
+	TaskId    *TaskId   `json:"task_id,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+
+	// Type task_upserted: a task was created or its derived fields changed — task is populated. task_removed: a task left the index (file deleted, @id removed, or superseded by a duplicate per G4) — task_id is populated. diagnostic_raised / diagnostic_cleared: a parse problem appeared or was resolved — diagnostic is populated. heartbeat: a periodic keep-alive with no payload, so a client can distinguish a silent-but-alive connection from a dropped one.
+	Type EventEnvelopeType `json:"type"`
+}
+
+// EventEnvelopeType task_upserted: a task was created or its derived fields changed — task is populated. task_removed: a task left the index (file deleted, @id removed, or superseded by a duplicate per G4) — task_id is populated. diagnostic_raised / diagnostic_cleared: a parse problem appeared or was resolved — diagnostic is populated. heartbeat: a periodic keep-alive with no payload, so a client can distinguish a silent-but-alive connection from a dropped one.
+type EventEnvelopeType string
+
+// FileContent A single vault file's raw content, unparsed.
+type FileContent struct {
+	// Content The file's raw Markdown, byte-for-byte.
+	Content    string     `json:"content"`
+	ModifiedAt *time.Time `json:"modified_at"`
+	Path       string     `json:"path"`
+
+	// Size Size in bytes.
+	Size int `json:"size"`
 }
 
 // PushSubscription The shape a browser's PushSubscription.toJSON() produces.
@@ -26,8 +216,61 @@ type PushSubscription struct {
 	} `json:"keys"`
 }
 
+// Task The full task representation. Every field here is a value the client can render as-is — no cron, no date-time evaluated against "now", no raw directive text (SDD.md §4, M1 "On schema depth"; UX.md §6, task card anatomy).
+type Task struct {
+	// EffectiveSuppression SDD.md G7's suppression ladder, collapsed to the one answer that holds right now — never the ladder itself, and never the raw @skip_until / @last_completed / @skip_count values the client would otherwise have to evaluate against "now" (CLAUDE.md: the backend is the only parser). Recomputed on every fetch and every SSE update.
+	EffectiveSuppression EffectiveSuppression `json:"effective_suppression"`
+
+	// FilePath Path relative to the vault root (UX.md §6, card anatomy: "@dog_feed · /Household/Routines.md").
+	FilePath string `json:"file_path"`
+
+	// Id Unique across the whole vault (SDD.md G1, G3).
+	Id TaskId `json:"id"`
+
+	// LastCompleted PRD.md §2.3 — when fulfillment was last recorded.
+	LastCompleted *time.Time `json:"last_completed"`
+
+	// LastTriggered PRD.md §2.3 — when the reminder was last dispatched.
+	LastTriggered *time.Time `json:"last_triggered"`
+
+	// NextFire The next computed fire point, or null when the task has no valid schedule or cannot fire again — paused, completed, failed, or an @once already elapsed (SDD.md G11). Computed server-side from @schedule/@once (UX.md §6, card anatomy: "in 2h 14m" is rendered client-side as a diff against this timestamp — the client does no cron evaluation, only date arithmetic on a value the server already resolved).
+	NextFire *time.Time `json:"next_fire"`
+
+	// Reason The @reason directive — why a task is paused, skipped, or failed (PRD.md §3.2; SDD.md G13).
+	Reason *string `json:"reason"`
+
+	// ScheduleSummary A human-readable rendering of @schedule or @once, e.g. "Daily at 08:00" or "Once, Mar 3 2026 09:00" — never the raw cron expression or ISO timestamp a client would have to interpret itself.
+	ScheduleSummary *string `json:"schedule_summary"`
+
+	// State The five values PRD.md §3.2 and schema/directives.yaml's @state directive define (SDD.md §3, State reference).
+	State TaskState `json:"state"`
+
+	// Target The integration module this task dispatches to, e.g. ios_notifications (PRD.md §4.1).
+	Target *string `json:"target"`
+
+	// Title The task line's title text (UX.md §6, card anatomy).
+	Title string `json:"title"`
+}
+
+// TaskCreate FR-2.1's create path. The id is never accepted here — it is always server-generated from the title slug (SDD.md G5).
+type TaskCreate struct {
+	// FilePath Vault-relative path of the file to append the new task line to.
+	FilePath string `json:"file_path"`
+
+	// Once An ISO timestamp. Mutually exclusive with schedule.
+	Once *time.Time `json:"once,omitempty"`
+
+	// Schedule A cron expression. Mutually exclusive with once.
+	Schedule *string `json:"schedule,omitempty"`
+	Target   *string `json:"target,omitempty"`
+	Title    string  `json:"title"`
+}
+
 // TaskId Unique across the whole vault (SDD.md G1, G3).
 type TaskId = string
+
+// TaskState The five values PRD.md §3.2 and schema/directives.yaml's @state directive define (SDD.md §3, State reference).
+type TaskState string
 
 // TriggerOutcome What the integration module reported back, not a delivery receipt. "accepted" means the push service accepted the message for delivery — Web Push returns no delivery confirmation (SDD.md §3, state reference).
 type TriggerOutcome struct {
@@ -47,9 +290,26 @@ type TriggerOutcome struct {
 // UnexpectedError defines model for UnexpectedError.
 type UnexpectedError = Error
 
+// GetFileParams defines parameters for GetFile.
+type GetFileParams struct {
+	// Path Path relative to the vault root, e.g. Household/Routines.md.
+	Path string `form:"path" json:"path"`
+}
+
 // DeleteSubscriptionJSONBody defines parameters for DeleteSubscription.
 type DeleteSubscriptionJSONBody struct {
 	Endpoint string `json:"endpoint"`
+}
+
+// PauseTaskJSONBody defines parameters for PauseTask.
+type PauseTaskJSONBody struct {
+	// Reason Recorded as @reason.
+	Reason *string `json:"reason,omitempty"`
+}
+
+// SkipTaskJSONBody defines parameters for SkipTask.
+type SkipTaskJSONBody struct {
+	Count *int `json:"count,omitempty"`
 }
 
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
@@ -57,3 +317,12 @@ type CreateSubscriptionJSONRequestBody = PushSubscription
 
 // DeleteSubscriptionJSONRequestBody defines body for DeleteSubscription for application/json ContentType.
 type DeleteSubscriptionJSONRequestBody DeleteSubscriptionJSONBody
+
+// CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
+type CreateTaskJSONRequestBody = TaskCreate
+
+// PauseTaskJSONRequestBody defines body for PauseTask for application/json ContentType.
+type PauseTaskJSONRequestBody PauseTaskJSONBody
+
+// SkipTaskJSONRequestBody defines body for SkipTask for application/json ContentType.
+type SkipTaskJSONRequestBody SkipTaskJSONBody
