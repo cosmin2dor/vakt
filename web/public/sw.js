@@ -15,7 +15,17 @@ self.addEventListener('activate', (event) => {
 // Display whatever payload push sends. No templating: title/body/icon are
 // placeholders until the notification content is designed (M3).
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {}
+  // M1's trigger endpoint sends an empty-string payload (templating is
+  // M3), and "" isn't valid JSON — .json() throws on it, so this must
+  // not assume every push carries parseable JSON.
+  let data = {}
+  if (event.data) {
+    try {
+      data = event.data.json()
+    } catch {
+      data = {}
+    }
+  }
   const title = data.title || 'Vakt'
   const options = {
     body: data.body || '',
