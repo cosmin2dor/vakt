@@ -6,3 +6,8 @@ web/dist/
 *.local.yaml
 /vault/
 .env
+
+# Real Web Push subscription for the device-verification test (write-
+# device-verification-test): a secret, device-bound credential — never
+# committed. See deploy/RUNBOOK.md.
+internal/api/testdata/device-subscription.json
