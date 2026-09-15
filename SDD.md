@@ -171,6 +171,20 @@ Note that `triggered` means *dispatched*, not *delivered*. Web Push returns no d
 
 Six milestones, each ending in something demonstrable. The ordering is deliberately not layered: the riskiest unknown in the project is whether iOS Web Push works at all in this deployment, so it is proven first, on permanent architecture, before an engine is built that assumes it.
 
+> **Restructured after M1 shipped — four milestones remain.** M1 overshot into later milestones: the app shell, aggregated feed, task cards, and push enrolment (M4) all exist, as do the production image, Compose file, volume and environment contract, and the start of the operator runbook (M6). The dispatch module (M3) is not just built but device-verified. What was left of M4 and M6 was thin enough to ship together, and the editor reads better as optional polish on a working product than as a gate before packaging — which is what this document already says about it.
+>
+> | Was | Now |
+> |---|---|
+> | M1 Foundation & Push Viability | ✅ shipped |
+> | M2 Parser & Vault I/O | **M2** — unchanged, still the whole remaining engine core |
+> | M3 Scheduler & Dispatch | **M3** — unchanged, minus the dispatch module already shipped |
+> | M4 API & Dashboard + M6 Packaging & Release | **M4** — collapsed; M6's smoke suite is M4's contract tests against the container |
+> | M5 Inline Smart Editor | **M5** — unchanged, moved last |
+>
+> Two endpoints this document's architecture assumes were never written into the contract: `GET /api/v1/directives` lands in M4 (thin — the registry is already generated), and `POST /api/v1/parse` at the start of M5, where it is first consumed.
+>
+> The per-milestone prose below is unchanged and remains the rationale; `issues/milestone*.md` carry the task-level scope boundaries.
+
 ### M1 — Foundation & Push Viability
 
 **Goal:** Prove an iOS push arrives, through real architecture, before anything else is built.
