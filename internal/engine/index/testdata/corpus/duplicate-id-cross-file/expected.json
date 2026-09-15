@@ -1,0 +1,23 @@
+{
+  "tasks": [
+    {
+      "id": "shared",
+      "path": "a.md",
+      "line": 1,
+      "raw": "- [ ] First claim @id(shared) @state(active)",
+      "values": {
+        "id": {"type": "string", "formatted": "shared"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "duplicate_id",
+      "file_path": "b.md",
+      "line": 1,
+      "severity": "error",
+      "task_id": "shared"
+    }
+  ]
+}

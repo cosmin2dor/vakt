@@ -1,0 +1,12 @@
+{
+  "tasks": [],
+  "diagnostics": [
+    {
+      "code": "missing_id",
+      "file_path": "household.md",
+      "line": 1,
+      "severity": "warning",
+      "task_id": ""
+    }
+  ]
+}

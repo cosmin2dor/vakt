@@ -1,0 +1,3 @@
+- [ ] Feed the dog @id(dog_feed) @target(ios_notifications) @schedule(0 8 * * *) @state(active)
+- [ ] Water the plants @id(water_plants) @target(ios_notifications) @once(2026-01-01T10:00:00) @state(active) @skip_count(2)
+- [ ] Take out trash @id(trash) @state(paused) @skip_until(2026-02-01)
