@@ -91,6 +91,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", HealthzHandler)
 	mux.HandleFunc("GET /api/v1/tasks", ListTasksHandler(eng, loc))
+	mux.HandleFunc("POST /api/v1/tasks", CreateTaskHandler(eng, writer, cfg.VaultDir, loc))
 	mux.HandleFunc("GET /api/v1/tasks/{id}", GetTaskHandler(eng, loc))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", TriggerHandler(cfg.VaultDir, registry))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/fulfill", FulfillTaskHandler(eng, orch, loc))
