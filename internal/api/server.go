@@ -10,6 +10,7 @@ import (
 	"github.com/cosmin2dor/vakt/internal/config"
 	"github.com/cosmin2dor/vakt/internal/engine"
 	"github.com/cosmin2dor/vakt/internal/engine/dispatch"
+	"github.com/cosmin2dor/vakt/internal/engine/schedule"
 	"github.com/cosmin2dor/vakt/internal/engine/vault"
 	"github.com/cosmin2dor/vakt/internal/integration/webpush"
 )
@@ -59,6 +60,11 @@ func NewServer(ctx context.Context, cfg ServerConfig) (http.Handler, error) {
 		}
 	}()
 
+	// Shares reg with eng so writeback's own writes are echo-suppressed in
+	// the index's reconciliation, same as any other vault mutation.
+	writer := vault.NewWriter(reg)
+	orch := schedule.NewOrchestrator(writer, cfg.VaultDir, loc)
+
 	subscriptions, err := config.NewStore(cfg.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("api: opening subscription store: %w", err)
@@ -87,6 +93,10 @@ func NewServer(ctx context.Context, cfg ServerConfig) (http.Handler, error) {
 	mux.HandleFunc("GET /api/v1/tasks", ListTasksHandler(eng, loc))
 	mux.HandleFunc("GET /api/v1/tasks/{id}", GetTaskHandler(eng, loc))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", TriggerHandler(cfg.VaultDir, registry))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/fulfill", FulfillTaskHandler(eng, orch, loc))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/pause", PauseTaskHandler(eng, orch, loc))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/resume", ResumeTaskHandler(eng, orch, loc))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/skip", SkipTaskHandler(eng, orch, loc))
 	mux.HandleFunc("/api/v1/subscriptions", CreateSubscriptionHandler(subscriptions))
 	mux.HandleFunc("/api/v1/subscriptions/unsubscribe", DeleteSubscriptionHandler(subscriptions))
 	mux.HandleFunc("/api/v1/vapid-public-key", VAPIDPublicKeyHandler(vapid))
