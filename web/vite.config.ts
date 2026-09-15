@@ -19,17 +19,23 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
-  // Dev-only: proxies the real API path to the Prism mock server
-  // (scripts/mock-server.sh) generated from schema/openapi.yaml, per
-  // validate-contract-against-mock. Prism serves paths as declared in the
-  // spec, without the /api/v1 prefix, so it's stripped here.
+  // Dev-only: proxies /api/v1 to a backend. Defaults to the Prism mock
+  // (scripts/mock-server.sh), which serves paths as declared in
+  // schema/openapi.yaml with no /api/v1 prefix, so it's stripped. Set
+  // VITE_API_PROXY_TARGET to point at the real Go daemon (internal/api)
+  // instead — it registers routes with the prefix already built in, so
+  // nothing is stripped in that case.
   server: {
     proxy: {
-      '/api/v1': {
-        target: 'http://localhost:4010',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/v1/, ''),
-      },
+      '/api/v1': (() => {
+        const target = process.env.VITE_API_PROXY_TARGET || 'http://localhost:4010'
+        const isMock = target.includes('localhost:4010')
+        return {
+          target,
+          changeOrigin: true,
+          ...(isMock ? { rewrite: (path: string) => path.replace(/^\/api\/v1/, '') } : {}),
+        }
+      })(),
     },
   },
 })

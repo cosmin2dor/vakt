@@ -6,10 +6,10 @@ import { groupAndSortTasks, type Task } from '@/lib/task-feed'
 
 type Status = 'loading' | 'ready' | 'error'
 
-// validate-contract-against-mock: fetches GET /api/v1/tasks from the
-// contract-generated mock server (scripts/mock-server.sh) and renders the
-// aggregated feed per UX.md §6/§6.1. This is a sketch proving the contract,
-// not the real M4 dashboard — no quick actions, no vault browser.
+// wire-feed-to-real-api: fetches GET /api/v1/tasks from the real daemon
+// (dev/vite.config.ts proxies to it, or to the Prism mock by default) and
+// renders the aggregated feed per UX.md §6/§6.1. Quick actions and the
+// vault browser are separate, later M4 tasks.
 export function TaskFeed() {
   const [status, setStatus] = useState<Status>('loading')
   const [tasks, setTasks] = useState<Task[]>([])
