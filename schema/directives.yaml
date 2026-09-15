@@ -5,8 +5,7 @@
 # so the Smart Editor's autocomplete and helpers can never drift ahead of
 # what the daemon actually parses.
 #
-# Every directive in PRD.md §3.2 appears exactly once below, except
-# @payload — deferred, see its own note further down.
+# Every directive in PRD.md §3.2 appears exactly once below.
 #
 # Field reference:
 #   name            The @directive name, without the @ or parens.
@@ -104,16 +103,19 @@ directives:
     system_written: false
     ui_helper: enum_dropdown
 
-  # @payload is deliberately absent from this registry, not merely
-  # undocumented. PRD.md §3.2/§4.2 describe it as a per-task directive
-  # the user writes to override the default notification payload, but
-  # that's being reconsidered: payload should likely be inherited from
-  # the target module's own configuration rather than typed by the user
-  # per task. Until that's settled, it isn't exposed — a line containing
-  # @payload(...) is simply an unrecognized directive. implement-
-  # ios-notifications-module already sends a fixed payload in M1 either
-  # way; this only affects when/whether the override mechanism reappears
-  # (M3 owns payload templating regardless of shape).
+  # @payload was withheld pending a decision on whether an override
+  # belongs per-task or per-module; reversed for M3's implement-
+  # payload-templating. PRD.md §3.2/§4.2 only ever describe a
+  # user-authored, per-task override, and G12's "unknown variable"
+  # warning only makes sense for text a human typed — there is no
+  # module-config concept elsewhere in this schema or the SDD. Free-text
+  # string, no fixed format, so no ui_helper.
+  - name: payload
+    value_type: string
+    arity: 1
+    required: false
+    system_written: false
+    ui_helper: null
 
   - name: skip_count
     value_type: integer
