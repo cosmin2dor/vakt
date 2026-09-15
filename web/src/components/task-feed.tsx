@@ -9,14 +9,25 @@ type Status = 'loading' | 'ready' | 'error'
 
 // wire-feed-to-real-api: fetches GET /api/v1/tasks from the real daemon
 // (dev/vite.config.ts proxies to it, or to the Prism mock by default) and
-// renders the aggregated feed per UX.md §6/§6.1. Quick actions and the
-// vault browser are separate, later M4 tasks.
+// renders the aggregated feed per UX.md §6/§6.1.
 //
 // implement-live-updates-via-sse: the initial fetch only gives a snapshot;
 // GET /api/v1/events then keeps `tasks` in sync as the vault changes.
 export function TaskFeed() {
   const [status, setStatus] = useState<Status>('loading')
   const [tasks, setTasks] = useState<Task[]>([])
+
+  // Quick-action optimistic update + rollback (implement-quick-actions):
+  // patch one field pending a request, or swap in the server's real Task
+  // once it settles. groupAndSortTasks re-derives groups from this array
+  // each render, so mutating one task here is enough to update the feed.
+  function updateTask(id: string, patch: Partial<Task>) {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  }
+
+  function replaceTask(task: Task) {
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +96,7 @@ export function TaskFeed() {
           </h2>
           <div className="flex flex-col gap-2">
             {group.tasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
+              <TaskCard key={task.id} task={task} onUpdate={updateTask} onReplace={replaceTask} />
             ))}
           </div>
         </section>
