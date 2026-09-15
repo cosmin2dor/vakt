@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/cosmin2dor/vakt/internal/api"
 )
@@ -50,11 +52,27 @@ func main() {
 		vapidContact = "mailto:vakt@localhost"
 	}
 
-	handler, err := api.NewServer(api.ServerConfig{
+	// VAKT_TZ sets the IANA timezone every cron/datetime directive is
+	// evaluated in (SDD.md G9), mirroring cmd/vaultdebug's own convention.
+	// Empty/unset defaults to time.Local via ServerConfig's own default.
+	var loc *time.Location
+	if tz := os.Getenv("VAKT_TZ"); tz != "" {
+		var err error
+		loc, err = time.LoadLocation(tz)
+		if err != nil {
+			log.Fatalf("vaktd: loading VAKT_TZ %q: %v", tz, err)
+		}
+	}
+
+	// No graceful-shutdown context yet (signal handling is out of scope
+	// here); the engine's background loop simply runs for the process
+	// lifetime.
+	handler, err := api.NewServer(context.Background(), api.ServerConfig{
 		WebDir:       webDir,
 		VaultDir:     vaultDir,
 		ConfigDir:    configDir,
 		VAPIDContact: vapidContact,
+		Loc:          loc,
 	})
 	if err != nil {
 		log.Fatal(err)

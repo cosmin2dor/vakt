@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func TestE2E_TriggerDispatchesAReallySignedAndEncryptedPush(t *testing.T) {
 	_, err = config.NewVAPIDStore(configDir)
 	require.NoError(t, err)
 
-	handler, err := NewServer(ServerConfig{
+	handler, err := NewServer(context.Background(), ServerConfig{
 		WebDir:       t.TempDir(),
 		VaultDir:     vaultDir,
 		ConfigDir:    configDir,

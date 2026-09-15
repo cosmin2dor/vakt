@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -75,7 +76,7 @@ func TestDevice_TriggerDispatchesARealPushToARealSubscription(t *testing.T) {
 	require.NoError(t, err, "reading vapid.json from %s (%s)", configDir, deviceConfigDirEnv)
 	require.NoError(t, os.WriteFile(subDir+"/vapid.json", vapidBytes, 0o600))
 
-	handler, err := NewServer(ServerConfig{
+	handler, err := NewServer(context.Background(), ServerConfig{
 		WebDir:       t.TempDir(),
 		VaultDir:     vaultDir,
 		ConfigDir:    subDir,
