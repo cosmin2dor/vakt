@@ -1,12 +1,13 @@
 // Package engine wires the reactive cycle (SDD.md §2.2): watcher changes
-// are re-parsed into the index, and non-empty reconciliations are
-// published on the event bus. It adds no new logic of its own — every
-// step below calls an existing package's public API.
+// are re-parsed into the index, and reconciliations that changed a task or
+// a diagnostic are published on the event bus. It adds no new logic of
+// its own — every step below calls an existing package's public API.
 package engine
 
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/cosmin2dor/vakt/internal/engine/index"
@@ -46,8 +47,9 @@ func New(root string, loc *time.Location, reg *vault.HashRegistry) (*Engine, err
 }
 
 // Run starts the watcher and reconciles the index on every reported
-// change, publishing non-empty results to the bus. It blocks until ctx is
-// cancelled, then stops the watcher and returns.
+// change, publishing to the bus whenever a task or a diagnostic actually
+// changed. It blocks until ctx is cancelled, then stops the watcher and
+// returns.
 func (e *Engine) Run(ctx context.Context) error {
 	watchErr := make(chan error, 1)
 	go func() { watchErr <- e.watcher.Run(ctx) }()
@@ -61,12 +63,16 @@ func (e *Engine) Run(ctx context.Context) error {
 			if !ok {
 				return <-watchErr
 			}
+			diagsBefore := e.idx.Diagnostics()
 			change, err := e.idx.ReconcileFile(rel)
 			if err != nil {
 				continue // a read/parse error here isn't fatal to the cycle; the file stays as last known-good (SDD.md G15)
 			}
-			if isEmpty(change) {
-				continue // "nothing changed" isn't an event worth waking subscribers for
+			// A diagnostic can appear or clear (e.g. a duplicate @id)
+			// without any task being added/updated/removed — still worth
+			// waking subscribers for, since nothing else observes it.
+			if isEmpty(change) && reflect.DeepEqual(diagsBefore, e.idx.Diagnostics()) {
+				continue // nothing a subscriber could observe changed
 			}
 			e.bus.Publish(change)
 		}
