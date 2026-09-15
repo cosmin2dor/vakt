@@ -29,6 +29,17 @@ func (f fakeSubscriptionSource) List() []config.PushSubscription {
 	return f.subs
 }
 
+// fakePruner is a SubscriptionPruner recording every endpoint Remove was
+// called with, standing in for *config.Store.
+type fakePruner struct {
+	removed []string
+}
+
+func (f *fakePruner) Remove(endpoint string) error {
+	f.removed = append(f.removed, endpoint)
+	return nil
+}
+
 // roundTripFunc adapts a function to http.RoundTripper, for asserting no
 // HTTP call was made without standing up a real listener.
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -73,7 +84,7 @@ func TestDispatchVerifiesAgainstRecordingServer(t *testing.T) {
 	}}}
 
 	priv := generateVAPIDKey(t)
-	mod, err := New(priv, "mailto:ops@example.com", subs, nil)
+	mod, err := New(priv, "mailto:ops@example.com", subs, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ios_notifications", mod.Name())
 
@@ -114,7 +125,7 @@ func TestDispatchNoSubscriptionsFails(t *testing.T) {
 		return nil, nil
 	})}
 
-	mod, err := New(priv, "mailto:ops@example.com", fakeSubscriptionSource{}, client)
+	mod, err := New(priv, "mailto:ops@example.com", fakeSubscriptionSource{}, nil, client)
 	require.NoError(t, err)
 
 	outcome, err := mod.Dispatch(context.Background(), dispatch.TaskContext{}, "payload")
@@ -142,7 +153,7 @@ func TestDispatchPartialFailureStillAccepted(t *testing.T) {
 	}}
 
 	priv := generateVAPIDKey(t)
-	mod, err := New(priv, "mailto:ops@example.com", subs, nil)
+	mod, err := New(priv, "mailto:ops@example.com", subs, nil, nil)
 	require.NoError(t, err)
 
 	outcome, err := mod.Dispatch(context.Background(), dispatch.TaskContext{}, "hello")
@@ -155,4 +166,78 @@ func TestDispatchPartialFailureStillAccepted(t *testing.T) {
 	require.Len(t, reqs, 1)
 	require.NoError(t, reqs[0].Err)
 	require.Equal(t, "hello", string(reqs[0].Plaintext))
+}
+
+// TestDispatchPrunesGoneSubscription covers G14's pruning half: a 410
+// response prunes exactly that subscription's endpoint, while a second,
+// accepting subscription keeps Outcome.Accepted true.
+func TestDispatchPrunesGoneSubscription(t *testing.T) {
+	recorder := pushrecorder.NewServer()
+	defer recorder.Close()
+	goodSub := recorder.Subscription()
+
+	gone := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer gone.Close()
+
+	subs := fakeSubscriptionSource{subs: []config.PushSubscription{
+		{Endpoint: goodSub.Endpoint, Keys: config.Keys{P256dh: goodSub.Keys.P256dh, Auth: goodSub.Keys.Auth}},
+		{Endpoint: gone.URL, Keys: arbitrarySubscriptionKeys(t)},
+	}}
+	pruner := &fakePruner{}
+
+	priv := generateVAPIDKey(t)
+	mod, err := New(priv, "mailto:ops@example.com", subs, pruner, nil)
+	require.NoError(t, err)
+
+	outcome, err := mod.Dispatch(context.Background(), dispatch.TaskContext{}, "hello")
+	require.NoError(t, err)
+	require.True(t, outcome.Accepted, "one accepting subscription must keep the batch accepted (G14)")
+	require.Equal(t, []string{gone.URL}, pruner.removed)
+}
+
+// TestDispatchPrunesNotFoundSubscription covers G14's other status: a 404
+// behaves identically to 410 for pruning purposes.
+func TestDispatchPrunesNotFoundSubscription(t *testing.T) {
+	notFound := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer notFound.Close()
+
+	subs := fakeSubscriptionSource{subs: []config.PushSubscription{
+		{Endpoint: notFound.URL, Keys: arbitrarySubscriptionKeys(t)},
+	}}
+	pruner := &fakePruner{}
+
+	priv := generateVAPIDKey(t)
+	mod, err := New(priv, "mailto:ops@example.com", subs, pruner, nil)
+	require.NoError(t, err)
+
+	outcome, err := mod.Dispatch(context.Background(), dispatch.TaskContext{}, "hello")
+	require.NoError(t, err)
+	require.False(t, outcome.Accepted, "the only subscription failed, so the batch fails")
+	require.Equal(t, []string{notFound.URL}, pruner.removed)
+}
+
+// TestDispatchNilPrunerSkipsPruning covers the nil-safe default: no
+// pruner configured means a 410 is still reported as a failure, but
+// nothing panics and no pruning is attempted.
+func TestDispatchNilPrunerSkipsPruning(t *testing.T) {
+	gone := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer gone.Close()
+
+	subs := fakeSubscriptionSource{subs: []config.PushSubscription{
+		{Endpoint: gone.URL, Keys: arbitrarySubscriptionKeys(t)},
+	}}
+
+	priv := generateVAPIDKey(t)
+	mod, err := New(priv, "mailto:ops@example.com", subs, nil, nil)
+	require.NoError(t, err)
+
+	outcome, err := mod.Dispatch(context.Background(), dispatch.TaskContext{}, "hello")
+	require.NoError(t, err)
+	require.False(t, outcome.Accepted)
 }
