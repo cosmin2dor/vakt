@@ -173,6 +173,12 @@ func (idx *Index) ReconcileFile(relPath string) (Change, error) {
 	return change, nil
 }
 
+// Root returns the vault-root directory Task.Path is relative to, so a
+// caller can resolve a Task to an absolute filesystem path.
+func (idx *Index) Root() string {
+	return idx.root
+}
+
 // Tasks returns a snapshot of every currently indexed task, keyed by id.
 func (idx *Index) Tasks() map[string]Task {
 	idx.mu.RLock()
