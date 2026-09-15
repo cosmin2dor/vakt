@@ -83,7 +83,12 @@ export function TaskFeed() {
   const groups = groupAndSortTasks(tasks)
 
   if (groups.length === 0) {
-    return <p className="text-sm text-muted-foreground">No tasks in the vault.</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        No tasks yet. Add a <code className="font-mono">@directive</code> to a file in your vault
+        and it will show up here.
+      </p>
+    )
   }
 
   return (

@@ -16,3 +16,24 @@ export function isStandalone(): boolean {
     (navigator as Navigator & { standalone?: boolean }).standalone === true
   )
 }
+
+// No GET /subscriptions endpoint exists to ask the server "has this device
+// already enrolled" (schema/openapi.yaml only has POST create/unsubscribe),
+// so this device's own enrolment history is tracked locally instead.
+const ENROLLED_KEY = 'vakt.push-enrolled'
+
+export function hasEnrolledPush(): boolean {
+  try {
+    return localStorage.getItem(ENROLLED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markPushEnrolled(): void {
+  try {
+    localStorage.setItem(ENROLLED_KEY, '1')
+  } catch {
+    // Best-effort — private browsing can throw on write.
+  }
+}
