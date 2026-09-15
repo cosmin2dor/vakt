@@ -141,6 +141,33 @@ type Diagnostic struct {
 // DiagnosticSeverity defines model for Diagnostic.Severity.
 type DiagnosticSeverity string
 
+// Directive One schema/directives.yaml entry, as generated into model.Directives (SDD.md §2.5). Mirrors that file's own field reference comment.
+type Directive struct {
+	// Arity Positional values inside the directive's parentheses.
+	Arity int `json:"arity"`
+
+	// Name The @directive name, without the @ or parens.
+	Name string `json:"name"`
+
+	// Pattern Only present when the value is further constrained beyond its type (e.g. @id's charset).
+	Pattern *string `json:"pattern,omitempty"`
+
+	// Required Whether a valid task line must carry this directive.
+	Required bool `json:"required"`
+
+	// SystemWritten True only for directives the daemon alone ever writes.
+	SystemWritten bool `json:"system_written"`
+
+	// UiHelper Which contextual helper the Smart Editor opens.
+	UiHelper *string `json:"ui_helper,omitempty"`
+
+	// ValueType string | enum | cron | datetime | integer.
+	ValueType string `json:"value_type"`
+
+	// Values Only present for a closed enum: its fixed value list.
+	Values *[]string `json:"values,omitempty"`
+}
+
 // DirectoryEntry One node of the vault's directory tree (FR-2.3).
 type DirectoryEntry struct {
 	// Children Present (possibly empty) only when type is directory.

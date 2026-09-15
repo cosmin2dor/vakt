@@ -185,6 +185,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/directives': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List every directive the daemon recognizes.
+     * @description The runtime directive registry (schema/directives.yaml, generated into model.Directives), served so the Smart Editor's autocomplete and helpers never drift ahead of what the daemon actually parses (SDD.md §2.5).
+     */
+    get: operations['listDirectives']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/vapid-public-key': {
     parameters: {
       query?: never
@@ -276,6 +296,25 @@ export interface components {
      * @enum {string}
      */
     TaskState: 'active' | 'triggered' | 'paused' | 'completed' | 'failed'
+    /** @description One schema/directives.yaml entry, as generated into model.Directives (SDD.md §2.5). Mirrors that file's own field reference comment. */
+    Directive: {
+      /** @description The @directive name, without the @ or parens. */
+      name: string
+      /** @description string | enum | cron | datetime | integer. */
+      value_type: string
+      /** @description Only present for a closed enum: its fixed value list. */
+      values?: string[] | null
+      /** @description Only present when the value is further constrained beyond its type (e.g. @id's charset). */
+      pattern?: string | null
+      /** @description Positional values inside the directive's parentheses. */
+      arity: number
+      /** @description Whether a valid task line must carry this directive. */
+      required: boolean
+      /** @description True only for directives the daemon alone ever writes. */
+      system_written: boolean
+      /** @description Which contextual helper the Smart Editor opens. */
+      ui_helper?: string | null
+    }
     /** @description SDD.md G7's suppression ladder, collapsed to the one answer that holds right now — never the ladder itself, and never the raw @skip_until / @last_completed / @skip_count values the client would otherwise have to evaluate against "now" (CLAUDE.md: the backend is the only parser). Recomputed on every fetch and every SSE update. */
     EffectiveSuppression: {
       /** @description Whether the next scheduled fire point will be bypassed. */
@@ -754,6 +793,27 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  listDirectives: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Every registered directive descriptor. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Directive'][]
         }
       }
       default: components['responses']['UnexpectedError']
