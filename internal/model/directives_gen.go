@@ -8,6 +8,7 @@ const (
 	DirectiveSchedule      = "schedule"
 	DirectiveOnce          = "once"
 	DirectiveTarget        = "target"
+	DirectivePayload       = "payload"
 	DirectiveSkipCount     = "skip_count"
 	DirectiveSkipUntil     = "skip_until"
 	DirectiveLastTriggered = "last_triggered"
@@ -79,6 +80,15 @@ var Directives = []DirectiveDescriptor{
 		Required:      false,
 		SystemWritten: false,
 		UIHelper:      strPtr("enum_dropdown"),
+	},
+	{
+		Name:          "payload",
+		ValueType:     "string",
+		Pattern:       nil,
+		Arity:         1,
+		Required:      false,
+		SystemWritten: false,
+		UIHelper:      nil,
 	},
 	{
 		Name:          "skip_count",

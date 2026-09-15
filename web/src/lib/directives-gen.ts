@@ -18,6 +18,7 @@ export const DIRECTIVESTATE = 'state'
 export const DIRECTIVESCHEDULE = 'schedule'
 export const DIRECTIVEONCE = 'once'
 export const DIRECTIVETARGET = 'target'
+export const DIRECTIVEPAYLOAD = 'payload'
 export const DIRECTIVESKIPCOUNT = 'skip_count'
 export const DIRECTIVESKIPUNTIL = 'skip_until'
 export const DIRECTIVELASTTRIGGERED = 'last_triggered'
@@ -74,6 +75,16 @@ export const DIRECTIVES: DirectiveDescriptor[] = [
     required: false,
     systemWritten: false,
     uiHelper: 'enum_dropdown',
+  },
+  {
+    name: 'payload',
+    valueType: 'string',
+    values: [],
+    pattern: null,
+    arity: 1,
+    required: false,
+    systemWritten: false,
+    uiHelper: null,
   },
   {
     name: 'skip_count',
