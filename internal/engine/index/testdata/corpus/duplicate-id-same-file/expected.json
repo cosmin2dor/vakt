@@ -1,0 +1,23 @@
+{
+  "tasks": [
+    {
+      "id": "dup",
+      "path": "household.md",
+      "line": 1,
+      "raw": "- [ ] First claim @id(dup) @state(active)",
+      "values": {
+        "id": {"type": "string", "formatted": "dup"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "duplicate_id",
+      "file_path": "household.md",
+      "line": 2,
+      "severity": "error",
+      "task_id": "dup"
+    }
+  ]
+}

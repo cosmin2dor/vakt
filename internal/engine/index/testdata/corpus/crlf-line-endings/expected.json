@@ -1,0 +1,25 @@
+{
+  "tasks": [
+    {
+      "id": "dog_feed",
+      "path": "household.md",
+      "line": 1,
+      "raw": "- [ ] Feed the dog @id(dog_feed) @state(active)\r",
+      "values": {
+        "id": {"type": "string", "formatted": "dog_feed"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    },
+    {
+      "id": "water_plants",
+      "path": "household.md",
+      "line": 2,
+      "raw": "- [ ] Water plants @id(water_plants) @state(paused)\r",
+      "values": {
+        "id": {"type": "string", "formatted": "water_plants"},
+        "state": {"type": "enum", "formatted": "paused"}
+      }
+    }
+  ],
+  "diagnostics": []
+}

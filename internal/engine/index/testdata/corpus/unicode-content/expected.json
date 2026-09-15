@@ -1,0 +1,24 @@
+{
+  "tasks": [
+    {
+      "id": "feed_dog_unicode",
+      "path": "household.md",
+      "line": 1,
+      "raw": "- [ ] Nourrir le chien 🐕 café @id(feed_dog_unicode) @target(ios_notifications) @state(active)",
+      "values": {
+        "id": {"type": "string", "formatted": "feed_dog_unicode"},
+        "target": {"type": "string", "formatted": "ios_notifications"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "invalid_id",
+      "file_path": "household.md",
+      "line": 2,
+      "severity": "error",
+      "task_id": "🐕bad"
+    }
+  ]
+}

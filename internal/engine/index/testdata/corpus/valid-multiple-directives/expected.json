@@ -1,0 +1,41 @@
+{
+  "tasks": [
+    {
+      "id": "dog_feed",
+      "path": "household.md",
+      "line": 1,
+      "raw": "- [ ] Feed the dog @id(dog_feed) @target(ios_notifications) @schedule(0 8 * * *) @state(active)",
+      "values": {
+        "id": {"type": "string", "formatted": "dog_feed"},
+        "target": {"type": "string", "formatted": "ios_notifications"},
+        "schedule": {"type": "cron", "formatted": "0 8 * * *"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    },
+    {
+      "id": "water_plants",
+      "path": "household.md",
+      "line": 2,
+      "raw": "- [ ] Water the plants @id(water_plants) @target(ios_notifications) @once(2026-01-01T10:00:00) @state(active) @skip_count(2)",
+      "values": {
+        "id": {"type": "string", "formatted": "water_plants"},
+        "target": {"type": "string", "formatted": "ios_notifications"},
+        "once": {"type": "datetime", "formatted": "2026-01-01T10:00:00Z"},
+        "state": {"type": "enum", "formatted": "active"},
+        "skip_count": {"type": "integer", "formatted": "2"}
+      }
+    },
+    {
+      "id": "trash",
+      "path": "household.md",
+      "line": 3,
+      "raw": "- [ ] Take out trash @id(trash) @state(paused) @skip_until(2026-02-01)",
+      "values": {
+        "id": {"type": "string", "formatted": "trash"},
+        "state": {"type": "enum", "formatted": "paused"},
+        "skip_until": {"type": "datetime", "formatted": "2026-02-01T00:00:00Z"}
+      }
+    }
+  ],
+  "diagnostics": []
+}

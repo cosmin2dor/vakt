@@ -1,0 +1,19 @@
+{
+  "tasks": [],
+  "diagnostics": [
+    {
+      "code": "invalid_id",
+      "file_path": "household.md",
+      "line": 1,
+      "severity": "error",
+      "task_id": "Has Spaces"
+    },
+    {
+      "code": "invalid_id",
+      "file_path": "household.md",
+      "line": 2,
+      "severity": "error",
+      "task_id": ""
+    }
+  ]
+}

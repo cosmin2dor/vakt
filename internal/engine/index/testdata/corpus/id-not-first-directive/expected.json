@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "order_test",
+      "path": "household.md",
+      "line": 1,
+      "raw": "- [ ] Order-independent id placement @state(active) @id(order_test) @target(ios_notifications)",
+      "values": {
+        "state": {"type": "enum", "formatted": "active"},
+        "id": {"type": "string", "formatted": "order_test"},
+        "target": {"type": "string", "formatted": "ios_notifications"}
+      }
+    }
+  ],
+  "diagnostics": []
+}

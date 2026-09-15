@@ -1,0 +1,2 @@
+- [ ] First claim @id(dup) @state(active)
+- [ ] Second claim @id(dup) @state(paused)

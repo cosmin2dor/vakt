@@ -1,0 +1,37 @@
+{
+  "tasks": [
+    {
+      "id": "odd_task",
+      "path": "household.md",
+      "line": 1,
+      "raw": "   - [x]    Odd   spacing    task   @state(active)   @id(odd_task)    @target(ios_notifications)",
+      "values": {
+        "state": {"type": "enum", "formatted": "active"},
+        "id": {"type": "string", "formatted": "odd_task"},
+        "target": {"type": "string", "formatted": "ios_notifications"}
+      }
+    },
+    {
+      "id": "bold_task",
+      "path": "household.md",
+      "line": 2,
+      "raw": "- [ ] **Bold task** @id(bold_task) @schedule(*/15 * * * *) @state(active)",
+      "values": {
+        "id": {"type": "string", "formatted": "bold_task"},
+        "schedule": {"type": "cron", "formatted": "*/15 * * * *"},
+        "state": {"type": "enum", "formatted": "active"}
+      }
+    },
+    {
+      "id": "tab_task",
+      "path": "household.md",
+      "line": 4,
+      "raw": "\t- [ ] Tab-indented @id(tab_task) @state(paused)",
+      "values": {
+        "id": {"type": "string", "formatted": "tab_task"},
+        "state": {"type": "enum", "formatted": "paused"}
+      }
+    }
+  ],
+  "diagnostics": []
+}

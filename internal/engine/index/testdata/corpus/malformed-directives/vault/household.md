@@ -1,0 +1,3 @@
+- [ ] Weird directive @id(malformed_task) @foo(bar) @state(active)
+- [ ] Empty value @id(empty_val_task) @target() @state(active)
+- [ ] Bad enum @id(bad_enum_task) @state(sleeping)
