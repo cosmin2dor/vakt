@@ -15,6 +15,20 @@ func (p Patch) Apply(line string) string {
 	return line[:p.Start] + p.Replacement + line[p.End:]
 }
 
+// SplicePatch reassembles a whole file's bytes with p applied at lineStart,
+// the absolute offset where the patched line begins. p's Start/End are
+// line-local; only that span changes, byte-for-byte elsewhere.
+func SplicePatch(data []byte, lineStart int, p Patch) []byte {
+	absStart := lineStart + p.Start
+	absEnd := lineStart + p.End
+
+	out := make([]byte, 0, len(data)+len(p.Replacement))
+	out = append(out, data[:absStart]...)
+	out = append(out, p.Replacement...)
+	out = append(out, data[absEnd:]...)
+	return out
+}
+
 // PatchDirective computes a Patch that writes value under name on line.
 //
 // If name already has a span (first occurrence wins, mirroring G4's
