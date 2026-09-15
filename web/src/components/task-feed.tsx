@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Separator } from '@/components/ui/separator'
 import { TaskCard } from '@/components/task-card'
 import { groupAndSortTasks, type Task } from '@/lib/task-feed'
+import { subscribeToEvents } from '@/lib/events'
 
 type Status = 'loading' | 'ready' | 'error'
 
@@ -10,6 +11,9 @@ type Status = 'loading' | 'ready' | 'error'
 // (dev/vite.config.ts proxies to it, or to the Prism mock by default) and
 // renders the aggregated feed per UX.md §6/§6.1. Quick actions and the
 // vault browser are separate, later M4 tasks.
+//
+// implement-live-updates-via-sse: the initial fetch only gives a snapshot;
+// GET /api/v1/events then keeps `tasks` in sync as the vault changes.
 export function TaskFeed() {
   const [status, setStatus] = useState<Status>('loading')
   const [tasks, setTasks] = useState<Task[]>([])
@@ -35,6 +39,25 @@ export function TaskFeed() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    return subscribeToEvents((envelope) => {
+      if (envelope.type === 'task_upserted' && envelope.task) {
+        const upserted = envelope.task
+        setTasks((prev) => {
+          const idx = prev.findIndex((t) => t.id === upserted.id)
+          if (idx === -1) return [...prev, upserted]
+          const next = [...prev]
+          next[idx] = upserted
+          return next
+        })
+      } else if (envelope.type === 'task_removed' && envelope.task_id) {
+        const removedId = envelope.task_id
+        setTasks((prev) => prev.filter((t) => t.id !== removedId))
+      }
+      // diagnostic_raised/diagnostic_cleared/heartbeat: no feed-level action.
+    })
   }, [])
 
   if (status === 'loading') {
