@@ -4,8 +4,7 @@ import { formatNextFire, type Task } from '@/lib/task-feed'
 
 // UX.md §6 "Task card anatomy" — title + next-fire, @id + file path, state
 // chip, and a 2px state-color rail on the left edge. Quick actions
-// (fulfill/pause/skip) are explicitly out of scope for this sketch —
-// validate-contract-against-mock's job is the card, not the actions.
+// (fulfill/pause/skip) are a separate, later M4 task.
 const SUPPRESSION_LABEL: Record<string, string> = {
   state_not_active: 'state not active',
   skip_until: 'skip until',

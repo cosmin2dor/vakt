@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:real": "VITE_API_PROXY_TARGET=http://localhost:8080 vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "format": "prettier --write .",
