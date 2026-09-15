@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
 import { PushEnrolmentDialog } from '@/components/push-enrolment-dialog'
 import { TaskFeed } from '@/components/task-feed'
 import { VaultBrowser } from '@/components/vault-browser'
@@ -49,6 +50,7 @@ function App() {
         </Button>
       </div>
       <div className="w-full max-w-md">{view === 'feed' ? <TaskFeed /> : <VaultBrowser />}</div>
+      <Toaster />
     </main>
   )
 }
