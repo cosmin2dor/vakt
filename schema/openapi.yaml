@@ -350,6 +350,28 @@ paths:
         default:
           $ref: "#/components/responses/UnexpectedError"
 
+  /directives:
+    get:
+      operationId: listDirectives
+      summary: List every directive the daemon recognizes.
+      description: >
+        The runtime directive registry (schema/directives.yaml, generated
+        into model.Directives), served so the Smart Editor's autocomplete
+        and helpers never drift ahead of what the daemon actually parses
+        (SDD.md §2.5).
+      tags: [directives]
+      responses:
+        "200":
+          description: Every registered directive descriptor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Directive"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
   /vapid-public-key:
     get:
       operationId: getVapidPublicKey
@@ -480,6 +502,51 @@ components:
         The five values PRD.md §3.2 and schema/directives.yaml's @state
         directive define (SDD.md §3, State reference).
       enum: [active, triggered, paused, completed, failed]
+
+    Directive:
+      type: object
+      description: >
+        One schema/directives.yaml entry, as generated into
+        model.Directives (SDD.md §2.5). Mirrors that file's own field
+        reference comment.
+      required:
+        - name
+        - value_type
+        - arity
+        - required
+        - system_written
+      properties:
+        name:
+          type: string
+          description: The @directive name, without the @ or parens.
+        value_type:
+          type: string
+          description: string | enum | cron | datetime | integer.
+        values:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: "Only present for a closed enum: its fixed value list."
+        pattern:
+          type: string
+          nullable: true
+          description: >
+            Only present when the value is further constrained beyond
+            its type (e.g. @id's charset).
+        arity:
+          type: integer
+          description: Positional values inside the directive's parentheses.
+        required:
+          type: boolean
+          description: Whether a valid task line must carry this directive.
+        system_written:
+          type: boolean
+          description: True only for directives the daemon alone ever writes.
+        ui_helper:
+          type: string
+          nullable: true
+          description: Which contextual helper the Smart Editor opens.
 
     EffectiveSuppression:
       type: object
