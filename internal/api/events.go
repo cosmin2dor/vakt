@@ -82,33 +82,45 @@ func StreamEventsHandler(eng *engine.Engine, loc *time.Location, heartbeatInterv
 				now := time.Now().In(loc)
 				for _, t := range change.Added {
 					dto := buildTaskDTO(t, now)
-					writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskUpserted, Task: &dto, Timestamp: now})
+					if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskUpserted, Task: &dto, Timestamp: now}); err != nil {
+						return
+					}
 				}
 				for _, t := range change.Updated {
 					dto := buildTaskDTO(t, now)
-					writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskUpserted, Task: &dto, Timestamp: now})
+					if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskUpserted, Task: &dto, Timestamp: now}); err != nil {
+						return
+					}
 				}
 				for _, id := range change.Removed {
 					tid := model.TaskId(id)
-					writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskRemoved, TaskId: &tid, Timestamp: now})
+					if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.TaskRemoved, TaskId: &tid, Timestamp: now}); err != nil {
+						return
+					}
 				}
 
 				newDiags := diagSnapshot(eng.Index().Diagnostics())
 				for k, d := range newDiags {
 					if _, existed := lastDiags[k]; !existed {
 						d := d
-						writeEnvelope(w, flusher, model.EventEnvelope{Type: model.DiagnosticRaised, Diagnostic: &d, Timestamp: now})
+						if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.DiagnosticRaised, Diagnostic: &d, Timestamp: now}); err != nil {
+							return
+						}
 					}
 				}
 				for k, d := range lastDiags {
 					if _, still := newDiags[k]; !still {
 						d := d
-						writeEnvelope(w, flusher, model.EventEnvelope{Type: model.DiagnosticCleared, Diagnostic: &d, Timestamp: now})
+						if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.DiagnosticCleared, Diagnostic: &d, Timestamp: now}); err != nil {
+							return
+						}
 					}
 				}
 				lastDiags = newDiags
 			case <-ticker.C:
-				writeEnvelope(w, flusher, model.EventEnvelope{Type: model.Heartbeat, Timestamp: time.Now().In(loc)})
+				if err := writeEnvelope(w, flusher, model.EventEnvelope{Type: model.Heartbeat, Timestamp: time.Now().In(loc)}); err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -116,12 +128,16 @@ func StreamEventsHandler(eng *engine.Engine, loc *time.Location, heartbeatInterv
 
 // writeEnvelope marshals one EventEnvelope as an SSE `data:` line and
 // flushes immediately. A marshal failure is skipped rather than killing
-// the whole stream over one bad event.
-func writeEnvelope(w http.ResponseWriter, flusher http.Flusher, env model.EventEnvelope) {
+// the whole stream over one bad event; a write failure (client gone) is
+// reported so the caller stops trying to use this connection.
+func writeEnvelope(w http.ResponseWriter, flusher http.Flusher, env model.EventEnvelope) error {
 	b, err := json.Marshal(env)
 	if err != nil {
-		return
+		return nil
 	}
-	fmt.Fprintf(w, "data: %s\n\n", b)
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
+		return err
+	}
 	flusher.Flush()
+	return nil
 }
