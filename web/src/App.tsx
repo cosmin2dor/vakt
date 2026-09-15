@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
-import { PushEnrolmentDialog } from '@/components/push-enrolment-dialog'
+import { FirstRunGuide } from '@/components/first-run-guide'
 import { TaskFeed } from '@/components/task-feed'
 import { VaultBrowser } from '@/components/vault-browser'
 import { cn } from '@/lib/utils'
@@ -28,7 +28,7 @@ function App() {
       </p>
       <p className="font-mono text-xs text-muted-foreground">@schedule(0 8 * * *)</p>
       <Button>Primary action</Button>
-      <PushEnrolmentDialog />
+      <FirstRunGuide />
 
       {/* No router yet — a two-way toggle is enough to reach the vault browser until real nav lands. */}
       <div className="mt-4 flex w-full max-w-md gap-2">

@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { isStandalone, urlBase64ToUint8Array } from '@/lib/push'
+import { hasEnrolledPush, isStandalone, markPushEnrolled, urlBase64ToUint8Array } from '@/lib/push'
 import type { components } from '@/lib/api-types'
 
 type Status = 'idle' | 'requesting' | 'denied' | 'success' | 'error'
@@ -17,8 +17,11 @@ type Status = 'idle' | 'requesting' | 'denied' | 'success' | 'error'
 // UX.md §6, "Push enrolment": plain-language iOS install guidance, no
 // celebration on success (§9). Triggered only from a real click — iOS
 // requires Notification.requestPermission() to originate in a user gesture.
-export function PushEnrolmentDialog() {
-  const [status, setStatus] = useState<Status>('idle')
+export function PushEnrolmentDialog({ onEnrolled }: { onEnrolled?: () => void } = {}) {
+  // Best-effort local memory of a past success — there's no GET /subscriptions
+  // to ask the server, so a returning, already-enrolled user isn't re-prompted
+  // to "turn on" something that's already on.
+  const [status, setStatus] = useState<Status>(() => (hasEnrolledPush() ? 'success' : 'idle'))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   async function enable() {
@@ -57,7 +60,9 @@ export function PushEnrolmentDialog() {
       })
       if (!subscribeResponse.ok) throw new Error('The server rejected the subscription.')
 
+      markPushEnrolled()
       setStatus('success')
+      onEnrolled?.()
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Something went wrong.')
       setStatus('error')
@@ -67,7 +72,9 @@ export function PushEnrolmentDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button>Enable notifications</Button>
+        <Button variant={status === 'success' ? 'secondary' : 'default'}>
+          {status === 'success' ? 'Notifications on' : 'Enable notifications'}
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

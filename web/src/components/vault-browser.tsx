@@ -51,7 +51,11 @@ export function VaultBrowser() {
   }
 
   if (!root || !root.children || root.children.length === 0) {
-    return <p className="text-sm text-muted-foreground">No files in the vault.</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Your vault is empty. Add a Markdown file to it and it will appear here.
+      </p>
+    )
   }
 
   return (
