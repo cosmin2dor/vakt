@@ -1,11 +1,16 @@
 package api
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/cosmin2dor/vakt/internal/config"
+	"github.com/cosmin2dor/vakt/internal/engine"
 	"github.com/cosmin2dor/vakt/internal/engine/dispatch"
+	"github.com/cosmin2dor/vakt/internal/engine/vault"
 	"github.com/cosmin2dor/vakt/internal/integration/webpush"
 )
 
@@ -21,12 +26,39 @@ type ServerConfig struct {
 	// VAPIDContact is the "sub" claim (a mailto: URI) every signed VAPID
 	// JWT carries, per RFC 8292.
 	VAPIDContact string
+
+	// Loc is the timezone every datetime/cron evaluation is done in
+	// (SDD.md G9). Nil defaults to time.Local, mirroring cmd/vaultdebug.
+	Loc *time.Location
 }
 
 // NewServer builds the production mux: the config stores, the dispatch
-// registry with the real ios_notifications module registered, and every
-// route main.go serves today.
-func NewServer(cfg ServerConfig) (http.Handler, error) {
+// registry with the real ios_notifications module registered, the live
+// vault index driving the read endpoints, and every route main.go serves
+// today. ctx governs the index's background reconciliation loop (Engine.Run)
+// — it is not tied to any one request's lifetime.
+func NewServer(ctx context.Context, cfg ServerConfig) (http.Handler, error) {
+	loc := cfg.Loc
+	if loc == nil {
+		loc = time.Local
+	}
+
+	// A fresh registry: nothing in the API layer writes to the vault yet,
+	// so nothing else needs to share it. A future writeback endpoint must
+	// reuse this same registry (echo suppression, SDD.md §2.2) — keep it
+	// a local var here rather than burying it, so lifting it into
+	// ServerConfig later is a small change.
+	reg := vault.NewHashRegistry()
+	eng, err := engine.New(cfg.VaultDir, loc, reg)
+	if err != nil {
+		return nil, fmt.Errorf("api: constructing engine: %w", err)
+	}
+	go func() {
+		if err := eng.Run(ctx); err != nil {
+			log.Printf("api: engine run loop exited: %v", err)
+		}
+	}()
+
 	subscriptions, err := config.NewStore(cfg.ConfigDir)
 	if err != nil {
 		return nil, fmt.Errorf("api: opening subscription store: %w", err)
@@ -52,6 +84,8 @@ func NewServer(cfg ServerConfig) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", HealthzHandler)
+	mux.HandleFunc("GET /api/v1/tasks", ListTasksHandler(eng, loc))
+	mux.HandleFunc("GET /api/v1/tasks/{id}", GetTaskHandler(eng, loc))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/trigger", TriggerHandler(cfg.VaultDir, registry))
 	mux.HandleFunc("/api/v1/subscriptions", CreateSubscriptionHandler(subscriptions))
 	mux.HandleFunc("/api/v1/subscriptions/unsubscribe", DeleteSubscriptionHandler(subscriptions))
