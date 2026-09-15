@@ -42,7 +42,7 @@ func NewServer(cfg ServerConfig) (http.Handler, error) {
 	}
 
 	registry := dispatch.NewRegistry()
-	pushModule, err := webpush.New(privateKey, cfg.VAPIDContact, subscriptions, nil)
+	pushModule, err := webpush.New(privateKey, cfg.VAPIDContact, subscriptions, subscriptions, nil)
 	if err != nil {
 		return nil, fmt.Errorf("api: constructing ios_notifications module: %w", err)
 	}

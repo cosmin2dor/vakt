@@ -31,6 +31,12 @@ type SubscriptionSource interface {
 	List() []config.PushSubscription
 }
 
+// SubscriptionPruner removes a dead subscription by endpoint (SDD.md G14).
+// *config.Store satisfies this directly via its Remove method.
+type SubscriptionPruner interface {
+	Remove(endpoint string) error
+}
+
 // Module is the ios_notifications dispatch.Module: VAPID signing (RFC
 // 8292), aes128gcm payload encryption (RFC 8291), and HTTP delivery to
 // every currently-enrolled subscription.
@@ -39,6 +45,7 @@ type Module struct {
 	publicKeyRaw []byte
 	contact      string
 	subs         SubscriptionSource
+	pruner       SubscriptionPruner
 	httpClient   *http.Client
 }
 
@@ -47,10 +54,13 @@ type Module struct {
 // constructor takes no dependency on how or where that key material is
 // persisted; sourcing it from real storage and registering the module
 // with cmd/vaktd is a follow-up integration step. subs enumerates
-// enrolled subscriptions on every Dispatch. httpClient defaults to a
-// bounded client when nil, so a caller can inject one pointed at a test
-// server.
-func New(privateKey *ecdsa.PrivateKey, contact string, subs SubscriptionSource, httpClient *http.Client) (*Module, error) {
+// enrolled subscriptions on every Dispatch. pruner, if non-nil, is used
+// to remove a subscription whose endpoint returns 404/410 (SDD.md G14);
+// a nil pruner just skips pruning, though production wiring should
+// always supply one (e.g. the same *config.Store as subs). httpClient
+// defaults to a bounded client when nil, so a caller can inject one
+// pointed at a test server.
+func New(privateKey *ecdsa.PrivateKey, contact string, subs SubscriptionSource, pruner SubscriptionPruner, httpClient *http.Client) (*Module, error) {
 	if privateKey == nil {
 		return nil, fmt.Errorf("webpush: private key must not be nil")
 	}
@@ -69,6 +79,7 @@ func New(privateKey *ecdsa.PrivateKey, contact string, subs SubscriptionSource, 
 		publicKeyRaw: pubKeyRaw,
 		contact:      contact,
 		subs:         subs,
+		pruner:       pruner,
 		httpClient:   httpClient,
 	}, nil
 }
@@ -137,9 +148,24 @@ func (m *Module) sendOne(ctx context.Context, sub config.PushSubscription, paylo
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+			return fmt.Errorf("%s: returned %d, %s", shortEndpoint(sub.Endpoint), resp.StatusCode, m.pruneNote(sub.Endpoint))
+		}
 		return fmt.Errorf("%s: returned %d", shortEndpoint(sub.Endpoint), resp.StatusCode)
 	}
 	return nil
+}
+
+// pruneNote removes endpoint via m.pruner (G14) if one is configured, and
+// describes the outcome for sendOne's aggregated error/Detail string.
+func (m *Module) pruneNote(endpoint string) string {
+	if m.pruner == nil {
+		return "not pruned: no pruner configured"
+	}
+	if err := m.pruner.Remove(endpoint); err != nil {
+		return fmt.Sprintf("pruning failed: %v", err)
+	}
+	return "pruned"
 }
 
 // decodeSubscription parses a stored subscription's base64url-encoded
