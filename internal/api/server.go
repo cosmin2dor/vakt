@@ -98,6 +98,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (http.Handler, error) {
 	mux.HandleFunc("POST /api/v1/tasks/{id}/pause", PauseTaskHandler(eng, orch, loc))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/resume", ResumeTaskHandler(eng, orch, loc))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/skip", SkipTaskHandler(eng, orch, loc))
+	mux.HandleFunc("GET /api/v1/directories", ListDirectoriesHandler(cfg.VaultDir))
+	mux.HandleFunc("GET /api/v1/files", GetFileHandler(cfg.VaultDir))
 	mux.HandleFunc("/api/v1/subscriptions", CreateSubscriptionHandler(subscriptions))
 	mux.HandleFunc("/api/v1/subscriptions/unsubscribe", DeleteSubscriptionHandler(subscriptions))
 	mux.HandleFunc("/api/v1/vapid-public-key", VAPIDPublicKeyHandler(vapid))
