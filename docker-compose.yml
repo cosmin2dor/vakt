@@ -24,6 +24,12 @@ services:
       TZ: "${TZ:-UTC}"
       VAKT_TZ: "${VAKT_TZ:-}"
       VAKT_VAULT_DIR: /vault
+      # Real push services validate this against a real domain — a
+      # "localhost" contact is rejected outright (confirmed against
+      # Apple's endpoint: every push 403s with "BadJwtToken" otherwise,
+      # independent of anything else being correct). Set this to a real,
+      # reachable mailto: address before relying on push notifications.
+      VAKT_VAPID_CONTACT: "${VAKT_VAPID_CONTACT:-}"
     volumes:
       - "${VAULT_PATH:-./vault}:/vault"
       - vakt-config:/config

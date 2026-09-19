@@ -7,6 +7,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -148,10 +149,11 @@ func (m *Module) sendOne(ctx context.Context, sub config.PushSubscription, paylo
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
-			return fmt.Errorf("%s: returned %d, %s", shortEndpoint(sub.Endpoint), resp.StatusCode, m.pruneNote(sub.Endpoint))
+			return fmt.Errorf("%s: returned %d, %s: %s", shortEndpoint(sub.Endpoint), resp.StatusCode, m.pruneNote(sub.Endpoint), body)
 		}
-		return fmt.Errorf("%s: returned %d", shortEndpoint(sub.Endpoint), resp.StatusCode)
+		return fmt.Errorf("%s: returned %d: %s", shortEndpoint(sub.Endpoint), resp.StatusCode, body)
 	}
 	return nil
 }

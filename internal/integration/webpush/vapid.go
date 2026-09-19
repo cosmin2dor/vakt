@@ -2,11 +2,13 @@ package webpush
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"time"
 )
@@ -47,6 +49,16 @@ func buildVAPIDHeader(priv *ecdsa.PrivateKey, pubKeyRaw []byte, endpoint, contac
 	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
 	if err != nil {
 		return "", fmt.Errorf("signing JWT: %w", err)
+	}
+	// crypto/ecdsa doesn't normalize to low-S; some verifiers reject a
+	// high-S signature even though JWS/RFC 8292 don't require low-S.
+	// (r, n-s) verifies identically to (r, s), so this is a free, standard
+	// normalization (BIP-62-style), not a different signature — cheap
+	// defensive hardening even though it wasn't the cause of any specific
+	// failure observed against a real push service.
+	halfOrder := new(big.Int).Rsh(elliptic.P256().Params().N, 1)
+	if s.Cmp(halfOrder) > 0 {
+		s = new(big.Int).Sub(elliptic.P256().Params().N, s)
 	}
 	sig := make([]byte, 64)
 	r.FillBytes(sig[:32])

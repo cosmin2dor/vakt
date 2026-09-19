@@ -45,11 +45,18 @@ func main() {
 	}
 
 	// VAKT_VAPID_CONTACT is the mailto: contact a push service can reach
-	// operators at, per RFC 8292's "sub" claim. Not a secret; a household
-	// deployment gets a working default if it's never set.
+	// operators at, per RFC 8292's "sub" claim. Not a secret, but NOT
+	// cosmetic either: real push services validate this against a real
+	// domain — "mailto:...@localhost" is rejected outright (confirmed
+	// against Apple's web.push.apple.com: every push fails with a 403
+	// "BadJwtToken", independent of everything else being correct, since
+	// "localhost" isn't a real, resolvable domain). The fallback below
+	// uses example.com (RFC 2606, a real registered domain reserved for
+	// documentation) so an unconfigured install still dispatches
+	// successfully; operators should still set a real contact.
 	vapidContact := os.Getenv("VAKT_VAPID_CONTACT")
 	if vapidContact == "" {
-		vapidContact = "mailto:vakt@localhost"
+		vapidContact = "mailto:admin@example.com"
 	}
 
 	// VAKT_TZ sets the IANA timezone every cron/datetime directive is
