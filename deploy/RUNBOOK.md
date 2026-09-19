@@ -53,11 +53,22 @@ to it:
 | `VAULT_PATH` | `./vault` | Yes | Host directory bind-mounted as the vault |
 | `TZ` | `UTC` | Yes | Alpine's own OS clock/log timestamps only |
 | `VAKT_TZ` | unset (falls back to `time.Local` in the container) | Yes | The IANA timezone every `@schedule`/`@once` directive is evaluated in (SDD.md G9) |
+| `VAKT_VAPID_CONTACT` | `mailto:admin@example.com` | **Yes — set this to a real, reachable address** | The RFC 8292 `sub` claim every VAPID JWT carries |
 
 `TZ` and `VAKT_TZ` are independent — setting one does not set the other.
 Leaving `VAKT_TZ` unset ties scheduling to the container's own local time,
 which is usually not what's intended; set it explicitly (e.g.
 `VAKT_TZ=Europe/Bucharest`).
+
+**`VAKT_VAPID_CONTACT` is not cosmetic.** Confirmed against a real device
+and Apple's production push endpoint during milestone acceptance: a push
+service validates this claim against a real, resolvable domain. The
+built-in fallback (`mailto:admin@example.com`, a real domain reserved for
+documentation by RFC 2606) works, but a `localhost` or otherwise
+non-resolvable contact does not — every push then fails with a 403
+`BadJwtToken`, with an otherwise completely correct request (valid
+signature, fresh subscription, everything else right). Set this to an
+address you actually control before relying on notifications.
 
 These are baked into the image by the `Dockerfile` and are not meant to
 be operator-set — listed for completeness:
@@ -68,7 +79,6 @@ be operator-set — listed for completeness:
 | `VAKT_WEB_DIR` | `/app/web/dist` | Fixed location of the built frontend inside the image |
 | `VAKT_CONFIG_DIR` | `/config` | Must match the `/config` volume mount |
 | `VAKT_VAULT_DIR` | set by `docker-compose.yml` to `/vault` | Must match the vault volume mount |
-| `VAKT_VAPID_CONTACT` | `mailto:vakt@localhost` | Cosmetic (RFC 8292 `sub` claim); change only if you want push services to see a different contact address |
 
 ## 4. First run
 
@@ -163,7 +173,9 @@ Work down this list in order:
    edit the file directly: change `@state(failed)` back to
    `@state(active)` and remove the `@reason` directive.
 2. **Check the container logs** (`docker compose logs vaktd`) around the
-   time the task should have fired, for a delivery error.
+   time the task should have fired, for a delivery error. A `403
+   BadJwtToken` from the push service specifically means
+   `VAKT_VAPID_CONTACT` isn't a real, resolvable domain — see §3.
 3. **Check the device is still enrolled.** A `404`/`410` from the push
    service auto-prunes that device's subscription (G14) — a single dead
    subscription does not fail the household's other devices, but if this
