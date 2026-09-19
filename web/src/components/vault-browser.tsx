@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, File, Folder, FolderOpen, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { VaultEditor } from '@/components/vault-editor'
+import { VaultEditor, type VaultEditorHandle } from '@/components/vault-editor'
+import { EditorAccessoryBar } from '@/components/editor-accessory-bar'
 import { cn } from '@/lib/utils'
 import type { components } from '@/lib/api-types'
 
@@ -212,6 +213,8 @@ function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
   const [original, setOriginal] = useState('')
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [barHeight, setBarHeight] = useState(0)
+  const editorRef = useRef<VaultEditorHandle>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -279,8 +282,18 @@ function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
         {status === 'error' && (
           <p className="p-3 text-sm text-muted-foreground">Couldn&rsquo;t load this file.</p>
         )}
-        {status === 'ready' && <VaultEditor value={content} onChange={setContent} />}
+        {status === 'ready' && (
+          <VaultEditor
+            ref={editorRef}
+            value={content}
+            onChange={setContent}
+            bottomInset={barHeight}
+          />
+        )}
       </div>
+      {status === 'ready' && (
+        <EditorAccessoryBar editorRef={editorRef} onHeightChange={setBarHeight} />
+      )}
     </div>
   )
 }
