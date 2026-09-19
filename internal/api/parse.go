@@ -120,6 +120,10 @@ func parsedSpan(s directive.Span, loc *time.Location) (model.ParsedSpan, directi
 // (cross-file duplicate @id) is deliberately excluded — there is no other
 // file or vault to check this line against.
 func lineScopedDiagnostics(line string, spans []directive.Span) []model.ParseDiagnostic {
+	if len(spans) == 0 {
+		return nil // no @directive syntax at all: prose, not a task line
+	}
+
 	var diags []model.ParseDiagnostic
 
 	idSpan, hasID := firstIDSpan(spans)

@@ -136,6 +136,13 @@ func TestParseHandler_MissingID(t *testing.T) {
 	assert.True(t, found, "expected a missing_id warning")
 }
 
+func TestParseHandler_PlainProseLine(t *testing.T) {
+	result := doParse(t, time.UTC, "# Household")
+
+	assert.Empty(t, result.Spans)
+	assert.Empty(t, result.Diagnostics, "a line with no @directive syntax is prose, not a task line")
+}
+
 func TestParseHandler_OnceInFuture(t *testing.T) {
 	loc := time.UTC
 	future := time.Now().In(loc).Add(48 * time.Hour).Format("2006-01-02T15:04:05")
