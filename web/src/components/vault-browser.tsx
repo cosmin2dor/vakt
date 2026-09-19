@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, File, Folder, FolderOpen } from 'lucide-react'
+import { ChevronRight, File, Folder, FolderOpen, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { VaultEditor } from '@/components/vault-editor'
 import { cn } from '@/lib/utils'
 import type { components } from '@/lib/api-types'
 
@@ -18,6 +21,7 @@ export function VaultBrowser() {
   const [status, setStatus] = useState<TreeStatus>('loading')
   const [root, setRoot] = useState<DirectoryEntry | null>(null)
   const [openPath, setOpenPath] = useState<string | null>(null)
+  const [editPath, setEditPath] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -66,7 +70,16 @@ export function VaultBrowser() {
         ))}
       </div>
       {/* Keyed on path so each file selection remounts with fresh loading state. */}
-      <FileDialog key={openPath} path={openPath} onClose={() => setOpenPath(null)} />
+      <FileDialog
+        key={openPath}
+        path={openPath}
+        onClose={() => setOpenPath(null)}
+        onEdit={(path) => {
+          setOpenPath(null)
+          setEditPath(path)
+        }}
+      />
+      {editPath && <FileEditor key={editPath} path={editPath} onClose={() => setEditPath(null)} />}
     </>
   )
 }
@@ -129,7 +142,15 @@ function TreeNode({
 }
 
 // Fetches GET /api/v1/files?path=... on demand, one file at a time.
-function FileDialog({ path, onClose }: { path: string | null; onClose: () => void }) {
+function FileDialog({
+  path,
+  onClose,
+  onEdit,
+}: {
+  path: string | null
+  onClose: () => void
+  onEdit: (path: string) => void
+}) {
   const [status, setStatus] = useState<FileStatus>(path ? 'loading' : 'idle')
   const [file, setFile] = useState<FileContent | null>(null)
 
@@ -169,11 +190,97 @@ function FileDialog({ path, onClose }: { path: string | null; onClose: () => voi
           <p className="text-sm text-muted-foreground">Couldn&rsquo;t load this file.</p>
         )}
         {status === 'ready' && file && (
-          <pre className="overflow-auto rounded-lg bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
-            {file.content}
-          </pre>
+          <>
+            <pre className="overflow-auto rounded-lg bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
+              {file.content}
+            </pre>
+            <Button size="sm" className="self-end" onClick={() => path && onEdit(path)}>
+              Edit
+            </Button>
+          </>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// A sustained-editing surface needs real room, so unlike the read-only
+// preview above, editing takes over the full viewport rather than a modal
+// (UX.md §8, 100dvh over 100vh for iOS Safari's toolbar).
+function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
+  const [status, setStatus] = useState<FileStatus>('loading')
+  const [original, setOriginal] = useState('')
+  const [content, setContent] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetch(`/api/v1/files?path=${encodeURIComponent(path)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`GET /api/v1/files -> ${res.status}`)
+        return res.json() as Promise<FileContent>
+      })
+      .then((data) => {
+        if (cancelled) return
+        setOriginal(data.content)
+        setContent(data.content)
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setStatus('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+
+  const dirty = content !== original
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/v1/files?path=${encodeURIComponent(path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      if (!res.ok) throw new Error(`PUT /api/v1/files -> ${res.status}`)
+      const saved = (await res.json()) as FileContent
+      setOriginal(saved.content)
+      toast.success('Saved')
+    } catch {
+      toast.error("Couldn't save this file.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <span className="truncate font-mono text-sm text-muted-foreground">{path}</span>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={!dirty || saving || status !== 'ready'} onClick={handleSave}>
+            {saving && <Loader2 className="size-4 animate-spin" />}
+            Save
+          </Button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1">
+        {status === 'loading' && (
+          <div className="h-full animate-pulse bg-muted" aria-hidden="true" />
+        )}
+        {status === 'error' && (
+          <p className="p-3 text-sm text-muted-foreground">Couldn&rsquo;t load this file.</p>
+        )}
+        {status === 'ready' && <VaultEditor value={content} onChange={setContent} />}
+      </div>
+    </div>
   )
 }
