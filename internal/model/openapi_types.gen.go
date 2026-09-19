@@ -94,6 +94,24 @@ func (e EventEnvelopeType) Valid() bool {
 	}
 }
 
+// Defines values for ParseDiagnosticSeverity.
+const (
+	ParseDiagnosticSeverityError   ParseDiagnosticSeverity = "error"
+	ParseDiagnosticSeverityWarning ParseDiagnosticSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the ParseDiagnosticSeverity enum.
+func (e ParseDiagnosticSeverity) Valid() bool {
+	switch e {
+	case ParseDiagnosticSeverityError:
+		return true
+	case ParseDiagnosticSeverityWarning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TaskState.
 const (
 	Active    TaskState = "active"
@@ -233,6 +251,65 @@ type FileContent struct {
 	Size int `json:"size"`
 }
 
+// ParseDiagnostic A problem found in the parsed line. Deliberately not the Task- level Diagnostic schema: that one identifies a file and line number for a diagnostic raised against the whole vault, while this one identifies a character range within the single line the client just sent, which is what the editor needs to underline the right span while typing (SDD.md §2.1).
+type ParseDiagnostic struct {
+	// Code Machine-readable classification, e.g. unknown_directive.
+	Code *string `json:"code,omitempty"`
+
+	// End Byte offset into the line where the problem ends.
+	End      int                     `json:"end"`
+	Message  string                  `json:"message"`
+	Severity ParseDiagnosticSeverity `json:"severity"`
+
+	// Start Byte offset into the line where the problem starts.
+	Start int `json:"start"`
+}
+
+// ParseDiagnosticSeverity defines model for ParseDiagnostic.Severity.
+type ParseDiagnosticSeverity string
+
+// ParseRequest One line of raw vault text, exactly as the editor's current line reads — checkbox, prose, and directives all included.
+type ParseRequest struct {
+	Line string `json:"line"`
+}
+
+// ParseResult Everything the Smart Editor needs to render one line without evaluating any of it itself (CLAUDE.md: the backend is the only parser).
+type ParseResult struct {
+	Diagnostics []ParseDiagnostic `json:"diagnostics"`
+	Spans       []ParsedSpan      `json:"spans"`
+
+	// UpcomingFires The next few times the line's @schedule or @once would fire, soonest first — an array rather than a single next_fire because the cron popover's preview (issues/milestone5.md, implement-contextual-helpers) shows several upcoming occurrences, not one. Null when the line has no valid @schedule/@once.
+	UpcomingFires *[]time.Time `json:"upcoming_fires,omitempty"`
+}
+
+// ParsedSpan One @name(value) match, mirroring directive.Span plus the typed value directive.ParseSpan derives from it (SDD.md §2.5). Offsets are byte positions into the request's line, Go slice convention. value_type and the typed fields are null when name is not a registered directive.
+type ParsedSpan struct {
+	// Cron The five cron fields, populated for value_type cron.
+	Cron *[]string `json:"cron,omitempty"`
+	End  int       `json:"end"`
+
+	// Int Populated for value_type integer.
+	Int       *int64 `json:"int,omitempty"`
+	Name      string `json:"name"`
+	NameEnd   int    `json:"name_end"`
+	NameStart int    `json:"name_start"`
+
+	// RawValue The unparsed text between the parens.
+	RawValue string `json:"raw_value"`
+	Start    int    `json:"start"`
+
+	// Str Populated for value_type string or enum.
+	Str *string `json:"str,omitempty"`
+
+	// Time Populated for value_type datetime.
+	Time       *time.Time `json:"time,omitempty"`
+	ValueEnd   int        `json:"value_end"`
+	ValueStart int        `json:"value_start"`
+
+	// ValueType string | enum | cron | datetime | integer.
+	ValueType *string `json:"value_type,omitempty"`
+}
+
 // PushSubscription The shape a browser's PushSubscription.toJSON() produces.
 type PushSubscription struct {
 	Endpoint       string     `json:"endpoint"`
@@ -338,6 +415,9 @@ type PauseTaskJSONBody struct {
 type SkipTaskJSONBody struct {
 	Count *int `json:"count,omitempty"`
 }
+
+// ParseLineJSONRequestBody defines body for ParseLine for application/json ContentType.
+type ParseLineJSONRequestBody = ParseRequest
 
 // CreateSubscriptionJSONRequestBody defines body for CreateSubscription for application/json ContentType.
 type CreateSubscriptionJSONRequestBody = PushSubscription

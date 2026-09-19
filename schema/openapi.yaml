@@ -457,6 +457,36 @@ paths:
         default:
           $ref: "#/components/responses/UnexpectedError"
 
+  /parse:
+    post:
+      operationId: parseLine
+      summary: Parse a single line of vault text.
+      description: >
+        The sole parsing authority (CLAUDE.md): every semantic question
+        about a line — is it valid, what does it mean, when does it next
+        fire — is answered here, never client-side (SDD.md §2.1). Scoped
+        to one line rather than a whole file: task identity in this
+        codebase is already line-scoped (SDD.md G1-G4), and the Smart
+        Editor's own consumers — live linting while typing, the cron
+        popover's next-runs preview — both operate on the line the
+        caret is in, not the whole file.
+      tags: [parse]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseRequest"
+      responses:
+        "200":
+          description: The line's typed spans, diagnostics, and schedule preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseResult"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
+
   /events:
     get:
       operationId: streamEvents
@@ -712,6 +742,133 @@ components:
             The task this diagnostic concerns, when one could be
             resolved (e.g. null for a duplicate @id's later, unscheduled
             occurrence).
+
+    ParseRequest:
+      type: object
+      description: >
+        One line of raw vault text, exactly as the editor's current line
+        reads — checkbox, prose, and directives all included.
+      required: [line]
+      properties:
+        line:
+          type: string
+
+    ParsedSpan:
+      type: object
+      description: >
+        One @name(value) match, mirroring directive.Span plus the typed
+        value directive.ParseSpan derives from it (SDD.md §2.5). Offsets
+        are byte positions into the request's line, Go slice convention.
+        value_type and the typed fields are null when name is not a
+        registered directive.
+      required:
+        - name
+        - start
+        - end
+        - name_start
+        - name_end
+        - value_start
+        - value_end
+        - raw_value
+      properties:
+        name:
+          type: string
+        start:
+          type: integer
+        end:
+          type: integer
+        name_start:
+          type: integer
+        name_end:
+          type: integer
+        value_start:
+          type: integer
+        value_end:
+          type: integer
+        raw_value:
+          type: string
+          description: The unparsed text between the parens.
+        value_type:
+          type: string
+          nullable: true
+          description: string | enum | cron | datetime | integer.
+        str:
+          type: string
+          nullable: true
+          description: Populated for value_type string or enum.
+        int:
+          type: integer
+          format: int64
+          nullable: true
+          description: Populated for value_type integer.
+        time:
+          type: string
+          format: date-time
+          nullable: true
+          description: Populated for value_type datetime.
+        cron:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: The five cron fields, populated for value_type cron.
+
+    ParseDiagnostic:
+      type: object
+      description: >
+        A problem found in the parsed line. Deliberately not the Task-
+        level Diagnostic schema: that one identifies a file and line
+        number for a diagnostic raised against the whole vault, while
+        this one identifies a character range within the single line
+        the client just sent, which is what the editor needs to underline
+        the right span while typing (SDD.md §2.1).
+      required: [severity, message, start, end]
+      properties:
+        severity:
+          type: string
+          enum: [warning, error]
+        message:
+          type: string
+        code:
+          type: string
+          nullable: true
+          description: Machine-readable classification, e.g. unknown_directive.
+        start:
+          type: integer
+          description: Byte offset into the line where the problem starts.
+        end:
+          type: integer
+          description: Byte offset into the line where the problem ends.
+
+    ParseResult:
+      type: object
+      description: >
+        Everything the Smart Editor needs to render one line without
+        evaluating any of it itself (CLAUDE.md: the backend is the only
+        parser).
+      required: [spans, diagnostics]
+      properties:
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedSpan"
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParseDiagnostic"
+        upcoming_fires:
+          type: array
+          nullable: true
+          items:
+            type: string
+            format: date-time
+          description: >
+            The next few times the line's @schedule or @once would fire,
+            soonest first — an array rather than a single next_fire
+            because the cron popover's preview (issues/milestone5.md,
+            implement-contextual-helpers) shows several upcoming
+            occurrences, not one. Null when the line has no valid
+            @schedule/@once.
 
     EventEnvelope:
       type: object
