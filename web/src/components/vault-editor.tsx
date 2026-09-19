@@ -11,6 +11,7 @@ import { minimalSetup } from 'codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 
 import { DIRECTIVES } from '@/lib/directives-gen'
+import { getCursorContext, type CursorContext } from '@/lib/cursor-context'
 
 const SYSTEM_DIRECTIVES = new Set(DIRECTIVES.filter((d) => d.systemWritten).map((d) => d.name))
 
@@ -104,18 +105,25 @@ const directiveHighlighter = ViewPlugin.fromClass(
 export function VaultEditor({
   value,
   onChange,
+  onCursorContextChange,
 }: {
   value: string
   onChange: (value: string) => void
+  onCursorContextChange?: (ctx: CursorContext) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
+  const onCursorContextChangeRef = useRef(onCursorContextChange)
   const initialValueRef = useRef(value)
 
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
+
+  useEffect(() => {
+    onCursorContextChangeRef.current = onCursorContextChange
+  }, [onCursorContextChange])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -131,6 +139,11 @@ export function VaultEditor({
           vaktTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString())
+            if (update.docChanged || update.selectionSet) {
+              const head = update.state.selection.main.head
+              const line = update.state.doc.lineAt(head)
+              onCursorContextChangeRef.current?.(getCursorContext(line.text, head - line.from))
+            }
           }),
         ],
       }),
