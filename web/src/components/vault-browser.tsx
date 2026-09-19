@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, File, Folder, FolderOpen, Loader2 } from 'lucide-react'
+import { ChevronRight, File, Folder, FolderOpen, Loader2, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -214,6 +214,7 @@ function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [barHeight, setBarHeight] = useState(0)
+  const [lintOffline, setLintOffline] = useState(false)
   const editorRef = useRef<VaultEditorHandle>(null)
 
   useEffect(() => {
@@ -265,7 +266,16 @@ function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="truncate font-mono text-sm text-muted-foreground">{path}</span>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {lintOffline && (
+            <span
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+              title="Validation is unavailable — the daemon can't be reached."
+            >
+              <WifiOff className="size-3.5" aria-hidden="true" />
+              Validation offline
+            </span>
+          )}
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
@@ -287,6 +297,7 @@ function FileEditor({ path, onClose }: { path: string; onClose: () => void }) {
             ref={editorRef}
             value={content}
             onChange={setContent}
+            onLintStatusChange={(s) => setLintOffline(s.offline)}
             bottomInset={barHeight}
           />
         )}
