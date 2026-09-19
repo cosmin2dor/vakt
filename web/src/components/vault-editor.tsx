@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { EditorState } from '@codemirror/state'
+import { EditorState, StateEffect, StateField } from '@codemirror/state'
 import {
   EditorView,
   Decoration,
@@ -14,6 +14,8 @@ import { DIRECTIVES } from '@/lib/directives-gen'
 import { getCursorContext, type CursorContext } from '@/lib/cursor-context'
 import { directiveSkeleton, filterDirectives, type Directive } from '@/lib/directive-autocomplete'
 import { useDirectives } from '@/lib/use-directives'
+import { useLineDiagnostics } from '@/lib/use-line-diagnostics'
+import { computeLineOffsets, toDiagnosticRanges } from '@/lib/diagnostic-ranges'
 import { DirectiveAutocompleteMenu } from '@/components/directive-autocomplete-menu'
 import { DirectiveHelper } from '@/components/directive-helpers'
 
@@ -52,7 +54,6 @@ const vaktTheme = EditorView.theme(
     '.cm-directive-name': { color: 'hsl(var(--primary))' },
     '.cm-directive-value': { color: 'hsl(var(--foreground))' },
     '.cm-directive-system': { color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' },
-    // Stubbed for implement-backend-driven-linting — no decorations use these yet.
     '.cm-diagnostic-error': { textDecoration: 'underline wavy hsl(var(--destructive))' },
     '.cm-diagnostic-warning': { textDecoration: 'underline wavy hsl(var(--state-triggered))' },
   },
@@ -112,6 +113,22 @@ const directiveHighlighter = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
+// Lint decorations come from an async, debounced /parse response rather than
+// the synchronous doc — a StateField driven by an effect, not a ViewPlugin
+// keyed off docChanged like directiveHighlighter above.
+const setDiagnostics = StateEffect.define<DecorationSet>()
+
+const diagnosticsField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setDiagnostics)) return effect.value
+    }
+    return tr.docChanged ? decorations.map(tr.changes) : decorations
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
 // Imperative API for callers (e.g. the mobile accessory bar) that need to
 // insert text at the caret without reaching into CodeMirror internals.
 export interface VaultEditorHandle {
@@ -126,10 +143,15 @@ export const VaultEditor = forwardRef<
     value: string
     onChange: (value: string) => void
     onCursorContextChange?: (ctx: CursorContext) => void
+    /** Reports whether live linting is currently reachable (SDD.md §2.1's offline state). */
+    onLintStatusChange?: (status: { offline: boolean }) => void
     /** Extra bottom padding/scroll-margin so the accessory bar never covers the caret. */
     bottomInset?: number
   }
->(function VaultEditor({ value, onChange, onCursorContextChange, bottomInset = 0 }, ref) {
+>(function VaultEditor(
+  { value, onChange, onCursorContextChange, onLintStatusChange, bottomInset = 0 },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -245,6 +267,37 @@ export const VaultEditor = forwardRef<
     onCursorContextChangeRef.current = onCursorContextChange
   }, [onCursorContextChange])
 
+  // Whole-document lint: debounced per-line /parse calls, aggregated back
+  // into absolute decoration ranges and pushed into CodeMirror via effect.
+  const lineDiagnostics = useLineDiagnostics(value)
+  const onLintStatusChangeRef = useRef(onLintStatusChange)
+  useEffect(() => {
+    onLintStatusChangeRef.current = onLintStatusChange
+  }, [onLintStatusChange])
+
+  useEffect(() => {
+    onLintStatusChangeRef.current?.({ offline: lineDiagnostics.offline })
+    const view = viewRef.current
+    if (!view) return
+    // Offline means "we don't know", never "assume clean" — clear rather
+    // than render (possibly stale) decorations built from a partial batch.
+    const ranges = lineDiagnostics.offline
+      ? []
+      : toDiagnosticRanges(computeLineOffsets(value), lineDiagnostics.byLine)
+    view.dispatch({
+      effects: setDiagnostics.of(
+        Decoration.set(
+          ranges.map((r) =>
+            Decoration.mark({
+              class: r.severity === 'error' ? 'cm-diagnostic-error' : 'cm-diagnostic-warning',
+            }).range(r.from, r.to),
+          ),
+          true,
+        ),
+      ),
+    })
+  }, [value, lineDiagnostics])
+
   // Read inside the mount-only editor effect below, which can't depend on
   // the (async-loaded) directives array without remounting CodeMirror.
   const directivesRef = useRef(directives)
@@ -263,6 +316,7 @@ export const VaultEditor = forwardRef<
           markdown(),
           EditorView.lineWrapping,
           directiveHighlighter,
+          diagnosticsField,
           vaktTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString())
