@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { EditorState } from '@codemirror/state'
 import {
   EditorView,
@@ -27,7 +27,13 @@ const vaktTheme = EditorView.theme(
       fontSize: '14px',
     },
     '.cm-scroller': { overflow: 'auto' },
-    '.cm-content': { lineHeight: '1.6', caretColor: 'hsl(var(--primary))' },
+    '.cm-content': {
+      lineHeight: '1.6',
+      caretColor: 'hsl(var(--primary))',
+      // Keeps the last line's caret clear of the mobile accessory bar (UX.md §8).
+      paddingBottom: 'var(--vakt-editor-bottom-inset, 0px)',
+      scrollMarginBottom: 'var(--vakt-editor-bottom-inset, 0px)',
+    },
     '.cm-gutters': {
       backgroundColor: 'hsl(var(--background))',
       color: 'hsl(var(--muted-foreground))',
@@ -102,15 +108,24 @@ const directiveHighlighter = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
-export function VaultEditor({
-  value,
-  onChange,
-  onCursorContextChange,
-}: {
-  value: string
-  onChange: (value: string) => void
-  onCursorContextChange?: (ctx: CursorContext) => void
-}) {
+// Imperative API for callers (e.g. the mobile accessory bar) that need to
+// insert text at the caret without reaching into CodeMirror internals.
+export interface VaultEditorHandle {
+  /** Inserts text at the cursor. cursorOffsetInText places the cursor inside
+   * the inserted text (e.g. between the parens of "@once()") instead of after it. */
+  insertAtCursor: (text: string, cursorOffsetInText?: number) => void
+}
+
+export const VaultEditor = forwardRef<
+  VaultEditorHandle,
+  {
+    value: string
+    onChange: (value: string) => void
+    onCursorContextChange?: (ctx: CursorContext) => void
+    /** Extra bottom padding/scroll-margin so the accessory bar never covers the caret. */
+    bottomInset?: number
+  }
+>(function VaultEditor({ value, onChange, onCursorContextChange, bottomInset = 0 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -120,6 +135,20 @@ export function VaultEditor({
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
+
+  useImperativeHandle(ref, () => ({
+    insertAtCursor(text, cursorOffsetInText) {
+      const view = viewRef.current
+      if (!view) return
+      const { from, to } = view.state.selection.main
+      const anchor = from + (cursorOffsetInText ?? text.length)
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor },
+      })
+      view.focus()
+    },
+  }))
 
   useEffect(() => {
     onCursorContextChangeRef.current = onCursorContextChange
@@ -158,5 +187,11 @@ export function VaultEditor({
     // Only the initial value seeds the editor; onChange reports later edits.
   }, [])
 
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dom.style.setProperty('--vakt-editor-bottom-inset', `${bottomInset}px`)
+  }, [bottomInset])
+
   return <div ref={containerRef} className="h-full w-full" />
-}
+})
