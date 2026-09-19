@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { EditorState } from '@codemirror/state'
 import {
   EditorView,
@@ -12,6 +12,9 @@ import { markdown } from '@codemirror/lang-markdown'
 
 import { DIRECTIVES } from '@/lib/directives-gen'
 import { getCursorContext, type CursorContext } from '@/lib/cursor-context'
+import { directiveSkeleton, filterDirectives } from '@/lib/directive-autocomplete'
+import { useDirectives } from '@/lib/use-directives'
+import { DirectiveAutocompleteMenu } from '@/components/directive-autocomplete-menu'
 
 const SYSTEM_DIRECTIVES = new Set(DIRECTIVES.filter((d) => d.systemWritten).map((d) => d.name))
 
@@ -132,6 +135,64 @@ export const VaultEditor = forwardRef<
   const onCursorContextChangeRef = useRef(onCursorContextChange)
   const initialValueRef = useRef(value)
 
+  // "@" autocomplete: anchorRef is the doc position of the triggering "@";
+  // autocomplete is non-null while the user is still typing that directive's name.
+  const anchorRef = useRef<number | null>(null)
+  const [autocomplete, setAutocomplete] = useState<{
+    query: string
+    selectedIndex: number
+    coords: { left: number; top: number; bottom: number }
+  } | null>(null)
+  const directives = useDirectives()
+
+  function closeAutocomplete() {
+    anchorRef.current = null
+    setAutocomplete(null)
+  }
+
+  function commitAutocomplete(name: string) {
+    const view = viewRef.current
+    if (!view || anchorRef.current === null) return
+    const from = anchorRef.current
+    const to = Math.max(from, view.state.selection.main.head)
+    const { text, cursorOffset } = directiveSkeleton(name)
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + cursorOffset },
+    })
+    view.focus()
+    closeAutocomplete()
+  }
+
+  function handleAutocompleteKeyDown(e: React.KeyboardEvent) {
+    if (!autocomplete) return
+    const items = filterDirectives(directives, autocomplete.query)
+    if (items.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      setAutocomplete((prev) =>
+        prev ? { ...prev, selectedIndex: (prev.selectedIndex + 1) % items.length } : prev,
+      )
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      setAutocomplete((prev) =>
+        prev
+          ? { ...prev, selectedIndex: (prev.selectedIndex - 1 + items.length) % items.length }
+          : prev,
+      )
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      e.stopPropagation()
+      commitAutocomplete(items[Math.min(autocomplete.selectedIndex, items.length - 1)].name)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      closeAutocomplete()
+    }
+  }
+
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
@@ -171,7 +232,25 @@ export const VaultEditor = forwardRef<
             if (update.docChanged || update.selectionSet) {
               const head = update.state.selection.main.head
               const line = update.state.doc.lineAt(head)
-              onCursorContextChangeRef.current?.(getCursorContext(line.text, head - line.from))
+              const ctx = getCursorContext(line.text, head - line.from)
+              onCursorContextChangeRef.current?.(ctx)
+
+              if (ctx.kind === 'after-at') {
+                const atPos = line.from + ctx.atPos
+                anchorRef.current = atPos
+                const coords = update.view.coordsAtPos(atPos)
+                if (coords) setAutocomplete({ query: '', selectedIndex: 0, coords })
+              } else if (
+                ctx.kind === 'directive-name' &&
+                anchorRef.current !== null &&
+                line.from + ctx.start - 1 === anchorRef.current
+              ) {
+                const coords = update.view.coordsAtPos(anchorRef.current)
+                if (coords) setAutocomplete({ query: ctx.name, selectedIndex: 0, coords })
+              } else {
+                anchorRef.current = null
+                setAutocomplete(null)
+              }
             }
           }),
         ],
@@ -193,5 +272,20 @@ export const VaultEditor = forwardRef<
     view.dom.style.setProperty('--vakt-editor-bottom-inset', `${bottomInset}px`)
   }, [bottomInset])
 
-  return <div ref={containerRef} className="h-full w-full" />
+  const autocompleteItems = autocomplete ? filterDirectives(directives, autocomplete.query) : []
+
+  return (
+    <div className="h-full w-full" onKeyDownCapture={handleAutocompleteKeyDown}>
+      {/* CodeMirror mounts its own DOM here imperatively — React never renders children into it. */}
+      <div ref={containerRef} className="h-full w-full" />
+      {autocomplete && autocompleteItems.length > 0 && (
+        <DirectiveAutocompleteMenu
+          items={autocompleteItems}
+          selectedIndex={Math.min(autocomplete.selectedIndex, autocompleteItems.length - 1)}
+          coords={{ left: autocomplete.coords.left, top: autocomplete.coords.bottom + 4 }}
+          onSelect={commitAutocomplete}
+        />
+      )}
+    </div>
+  )
 })
