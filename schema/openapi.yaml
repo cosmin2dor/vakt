@@ -456,6 +456,51 @@ paths:
                 $ref: "#/components/schemas/Error"
         default:
           $ref: "#/components/responses/UnexpectedError"
+    put:
+      operationId: putFile
+      summary: Overwrite a single vault file's raw content.
+      description: >
+        Backs the Smart Editor's save action (integrate-codemirror). A
+        full-file, atomic overwrite via vault.Writer.Write — not a
+        directive patch: CLAUDE.md's byte-range patcher is for a single
+        directive span, but free-form prose editing touches arbitrary
+        bytes across the whole file. No conflict detection: a concurrent
+        external edit can be silently clobbered (SDD.md's accepted cost).
+      tags: [vault]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: Path relative to the vault root, e.g. Household/Routines.md.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileWrite"
+      responses:
+        "200":
+          description: The file's content after the write.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+        "400":
+          description: Invalid path, or path escapes the vault root.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No file exists at this path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/UnexpectedError"
 
   /parse:
     post:
@@ -944,6 +989,15 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    FileWrite:
+      type: object
+      description: A full-file overwrite request body (PUT /files).
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: The file's new raw Markdown content, byte-for-byte.
 
     TriggerOutcome:
       type: object

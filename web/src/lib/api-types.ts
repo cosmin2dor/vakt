@@ -257,7 +257,11 @@ export interface paths {
      * @description Backs the vault browser's file view (UX.md §6.1) and, later, the Smart Editor's read path (full editor semantics are M5). Returns the file's raw Markdown byte-for-byte; this endpoint does not parse it — that is what `/tasks` and (per CLAUDE.md) `/parse` are for. `path` is a query parameter rather than a path segment because vault paths contain `/` themselves.
      */
     get: operations['getFile']
-    put?: never
+    /**
+     * Overwrite a single vault file's raw content.
+     * @description Backs the Smart Editor's save action (integrate-codemirror). A full-file, atomic overwrite via vault.Writer.Write — not a directive patch: CLAUDE.md's byte-range patcher is for a single directive span, but free-form prose editing touches arbitrary bytes across the whole file. No conflict detection: a concurrent external edit can be silently clobbered (SDD.md's accepted cost).
+     */
+    put: operations['putFile']
     post?: never
     delete?: never
     options?: never
@@ -488,6 +492,11 @@ export interface components {
       size: number
       /** Format: date-time */
       modified_at: string | null
+    }
+    /** @description A full-file overwrite request body (PUT /files). */
+    FileWrite: {
+      /** @description The file's new raw Markdown content, byte-for-byte. */
+      content: string
     }
     /** @description What the integration module reported back, not a delivery receipt. "accepted" means the push service accepted the message for delivery — Web Push returns no delivery confirmation (SDD.md §3, state reference). */
     TriggerOutcome: {
@@ -962,6 +971,52 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['FileContent']
+        }
+      }
+      /** @description No file exists at this path. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      default: components['responses']['UnexpectedError']
+    }
+  }
+  putFile: {
+    parameters: {
+      query: {
+        /** @description Path relative to the vault root, e.g. Household/Routines.md. */
+        path: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FileWrite']
+      }
+    }
+    responses: {
+      /** @description The file's content after the write. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FileContent']
+        }
+      }
+      /** @description Invalid path, or path escapes the vault root. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
         }
       }
       /** @description No file exists at this path. */
