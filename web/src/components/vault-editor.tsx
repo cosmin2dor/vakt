@@ -12,9 +12,10 @@ import { markdown } from '@codemirror/lang-markdown'
 
 import { DIRECTIVES } from '@/lib/directives-gen'
 import { getCursorContext, type CursorContext } from '@/lib/cursor-context'
-import { directiveSkeleton, filterDirectives } from '@/lib/directive-autocomplete'
+import { directiveSkeleton, filterDirectives, type Directive } from '@/lib/directive-autocomplete'
 import { useDirectives } from '@/lib/use-directives'
 import { DirectiveAutocompleteMenu } from '@/components/directive-autocomplete-menu'
+import { DirectiveHelper } from '@/components/directive-helpers'
 
 const SYSTEM_DIRECTIVES = new Set(DIRECTIVES.filter((d) => d.systemWritten).map((d) => d.name))
 
@@ -145,6 +146,21 @@ export const VaultEditor = forwardRef<
   } | null>(null)
   const directives = useDirectives()
 
+  // Contextual helper (PRD §6.2): shown whenever the cursor sits inside a
+  // directive's value and that directive has a ui_helper. `open` toggles
+  // between the small trigger (icon/select) and its expanded content.
+  const [activeHelper, setActiveHelper] = useState<{
+    directive: Directive
+    from: number
+    to: number
+    value: string
+    coords: { left: number; top: number }
+    open: boolean
+  } | null>(null)
+  // Doc position of a value just inserted by autocomplete, so the very next
+  // cursor-context update auto-opens its helper instead of showing a trigger.
+  const autoOpenPosRef = useRef<number | null>(null)
+
   function closeAutocomplete() {
     anchorRef.current = null
     setAutocomplete(null)
@@ -156,12 +172,26 @@ export const VaultEditor = forwardRef<
     const from = anchorRef.current
     const to = Math.max(from, view.state.selection.main.head)
     const { text, cursorOffset } = directiveSkeleton(name)
+    const directive = directives.find((d) => d.name === name)
+    if (directive?.ui_helper) autoOpenPosRef.current = from + cursorOffset
     view.dispatch({
       changes: { from, to, insert: text },
       selection: { anchor: from + cursorOffset },
     })
     view.focus()
     closeAutocomplete()
+  }
+
+  function commitHelperValue(text: string) {
+    const view = viewRef.current
+    if (!view || !activeHelper) return
+    const { from, to } = activeHelper
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+    })
+    view.focus()
+    setActiveHelper(null)
   }
 
   function handleAutocompleteKeyDown(e: React.KeyboardEvent) {
@@ -215,6 +245,13 @@ export const VaultEditor = forwardRef<
     onCursorContextChangeRef.current = onCursorContextChange
   }, [onCursorContextChange])
 
+  // Read inside the mount-only editor effect below, which can't depend on
+  // the (async-loaded) directives array without remounting CodeMirror.
+  const directivesRef = useRef(directives)
+  useEffect(() => {
+    directivesRef.current = directives
+  }, [directives])
+
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -251,6 +288,29 @@ export const VaultEditor = forwardRef<
                 anchorRef.current = null
                 setAutocomplete(null)
               }
+
+              if (ctx.kind === 'directive-value') {
+                const directive = directivesRef.current.find((d) => d.name === ctx.name)
+                const from = line.from + ctx.start
+                const to = line.from + ctx.end
+                const coords = update.view.coordsAtPos(to)
+                if (directive?.ui_helper && coords) {
+                  const autoOpen = autoOpenPosRef.current === from
+                  autoOpenPosRef.current = null
+                  setActiveHelper((prev) => ({
+                    directive,
+                    from,
+                    to,
+                    value: ctx.value,
+                    coords: { left: coords.left, top: coords.bottom + 4 },
+                    open: autoOpen || (prev?.from === from ? prev.open : false),
+                  }))
+                } else {
+                  setActiveHelper(null)
+                }
+              } else {
+                setActiveHelper(null)
+              }
             }
           }),
         ],
@@ -284,6 +344,17 @@ export const VaultEditor = forwardRef<
           selectedIndex={Math.min(autocomplete.selectedIndex, autocompleteItems.length - 1)}
           coords={{ left: autocomplete.coords.left, top: autocomplete.coords.bottom + 4 }}
           onSelect={commitAutocomplete}
+        />
+      )}
+      {activeHelper && (
+        <DirectiveHelper
+          key={activeHelper.from}
+          directive={activeHelper.directive}
+          value={activeHelper.value}
+          coords={activeHelper.coords}
+          open={activeHelper.open}
+          onOpenChange={(open) => setActiveHelper((prev) => (prev ? { ...prev, open } : prev))}
+          onCommit={commitHelperValue}
         />
       )}
     </div>
