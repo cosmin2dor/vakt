@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/cosmin2dor/vakt/internal/engine/vault"
 	"github.com/cosmin2dor/vakt/internal/model"
 )
 
@@ -194,6 +196,70 @@ func TestGetFile_TraversalRejected(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("path %q: status = %d, want 400, body = %s", path, rec.Code, rec.Body.String())
 		}
+	}
+}
+
+func TestPutFile_Success(t *testing.T) {
+	dir := nestedVault(t)
+	writer := vault.NewWriter(nil)
+	body := strings.NewReader(`{"content":"- [ ] Water plants @schedule(0 8 * * *)"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/files?path=Household/Routines.md", body)
+	rec := httptest.NewRecorder()
+	PutFileHandler(dir, writer)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var fc model.FileContent
+	if err := json.Unmarshal(rec.Body.Bytes(), &fc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := "- [ ] Water plants @schedule(0 8 * * *)"
+	if fc.Content != want {
+		t.Fatalf("content = %q, want %q", fc.Content, want)
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(dir, "Household/Routines.md"))
+	if err != nil {
+		t.Fatalf("reading written file: %v", err)
+	}
+	if string(onDisk) != want {
+		t.Fatalf("on-disk content = %q, want %q", onDisk, want)
+	}
+}
+
+func TestPutFile_NonexistentFile(t *testing.T) {
+	dir := nestedVault(t)
+	writer := vault.NewWriter(nil)
+	body := strings.NewReader(`{"content":"anything"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/files?path=Nope.md", body)
+	rec := httptest.NewRecorder()
+	PutFileHandler(dir, writer)(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestPutFile_TraversalRejected(t *testing.T) {
+	dir := nestedVault(t)
+	writer := vault.NewWriter(nil)
+	body := strings.NewReader(`{"content":"pwned"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/files?path=../secret.txt", body)
+	rec := httptest.NewRecorder()
+	PutFileHandler(dir, writer)(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestPutFile_InvalidBody(t *testing.T) {
+	dir := nestedVault(t)
+	writer := vault.NewWriter(nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/files?path=Notes.md", strings.NewReader("not json"))
+	rec := httptest.NewRecorder()
+	PutFileHandler(dir, writer)(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
 

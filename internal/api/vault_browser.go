@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/cosmin2dor/vakt/internal/engine/vault"
 	"github.com/cosmin2dor/vakt/internal/model"
 )
 
@@ -79,8 +81,7 @@ func buildTree(vaultRoot, relPath string) (model.DirectoryEntry, error) {
 }
 
 // GetFileHandler reads one vault file's raw content by vault-relative path
-// (schema/openapi.yaml GET /files). Read-only — editing is the editor's
-// concern, a later milestone.
+// (schema/openapi.yaml GET /files).
 func GetFileHandler(vaultRoot string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		relPath := r.URL.Query().Get("path")
@@ -112,6 +113,56 @@ func GetFileHandler(vaultRoot string) http.HandlerFunc {
 			Path:       relPath,
 			Content:    string(content),
 			Size:       len(content),
+			ModifiedAt: &modTime,
+		})
+	}
+}
+
+// PutFileHandler overwrites one vault file's whole content by vault-relative
+// path (schema/openapi.yaml PUT /files). A full-file publish via
+// vault.Writer.Write, not a directive patch — free-form editing touches
+// arbitrary bytes, so there's no single span to patch. No conflict
+// detection: a concurrent external edit is silently overwritten.
+func PutFileHandler(vaultRoot string, writer *vault.Writer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		relPath := r.URL.Query().Get("path")
+		if relPath == "" {
+			writeError(w, http.StatusBadRequest, "invalid_path", "path query parameter is required")
+			return
+		}
+
+		abs, err := resolveVaultPath(vaultRoot, relPath)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_path", "path escapes the vault root")
+			return
+		}
+
+		if info, err := os.Stat(abs); err != nil || info.IsDir() {
+			writeError(w, http.StatusNotFound, "file_not_found", "no such file: "+relPath)
+			return
+		}
+
+		var body model.FileWrite
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+			return
+		}
+
+		if _, err := writer.Write(abs, []byte(body.Content)); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "writing file: "+err.Error())
+			return
+		}
+
+		info, err := os.Stat(abs)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "statting written file: "+err.Error())
+			return
+		}
+		modTime := info.ModTime()
+		writeJSON(w, http.StatusOK, model.FileContent{
+			Path:       relPath,
+			Content:    body.Content,
+			Size:       len(body.Content),
 			ModifiedAt: &modTime,
 		})
 	}

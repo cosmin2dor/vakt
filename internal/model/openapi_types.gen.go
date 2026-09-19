@@ -251,6 +251,12 @@ type FileContent struct {
 	Size int `json:"size"`
 }
 
+// FileWrite A full-file overwrite request body (PUT /files).
+type FileWrite struct {
+	// Content The file's new raw Markdown content, byte-for-byte.
+	Content string `json:"content"`
+}
+
 // ParseDiagnostic A problem found in the parsed line. Deliberately not the Task- level Diagnostic schema: that one identifies a file and line number for a diagnostic raised against the whole vault, while this one identifies a character range within the single line the client just sent, which is what the editor needs to underline the right span while typing (SDD.md §2.1).
 type ParseDiagnostic struct {
 	// Code Machine-readable classification, e.g. unknown_directive.
@@ -400,6 +406,12 @@ type GetFileParams struct {
 	Path string `form:"path" json:"path"`
 }
 
+// PutFileParams defines parameters for PutFile.
+type PutFileParams struct {
+	// Path Path relative to the vault root, e.g. Household/Routines.md.
+	Path string `form:"path" json:"path"`
+}
+
 // DeleteSubscriptionJSONBody defines parameters for DeleteSubscription.
 type DeleteSubscriptionJSONBody struct {
 	Endpoint string `json:"endpoint"`
@@ -415,6 +427,9 @@ type PauseTaskJSONBody struct {
 type SkipTaskJSONBody struct {
 	Count *int `json:"count,omitempty"`
 }
+
+// PutFileJSONRequestBody defines body for PutFile for application/json ContentType.
+type PutFileJSONRequestBody = FileWrite
 
 // ParseLineJSONRequestBody defines body for ParseLine for application/json ContentType.
 type ParseLineJSONRequestBody = ParseRequest
